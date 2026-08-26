@@ -1,0 +1,12 @@
+{
+	"admin/services/parentcontrol": {
+		"title": "家长控制",
+		"action": {
+			"type": "view",
+			"path": "parentcontrol/overview"
+		},
+		"depends": {
+			"acl": [ "luci-app-parentcontrol" ]
+		}
+	}
+}

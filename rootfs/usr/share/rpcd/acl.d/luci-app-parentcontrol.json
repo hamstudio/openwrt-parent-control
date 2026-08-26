@@ -1,0 +1,17 @@
+{
+	"luci-app-parentcontrol": {
+		"description": "Grant access to ParentControl",
+		"read": {
+			"ubus": {
+				"service": [ "list" ]
+			},
+			"uci": [ "parentcontrol" ],
+			"file": {
+				"/etc/parentcontrol/config.json": [ "read" ]
+			}
+		},
+		"write": {
+			"uci": [ "parentcontrol" ]
+		}
+	}
+}
