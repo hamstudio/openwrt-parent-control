@@ -1,15 +1,17 @@
-# RESTful API 规范文档
+# RESTful API Reference
 
-ParentControl Daemon 内置轻量级 HTTP API 服务，支持外部系统、移动 App 或第三方自动化调用。默认服务监听端口为 `8088`。
+[English](API.md) | [简体中文](API_zh.md)
+
+ParentControl Daemon embeds a lightweight HTTP RESTful API on port `8088` by default, allowing seamless integration with mobile apps, home automation platforms, and external scripts.
 
 ---
 
-## 1. 系统与状态接口
+## 1. System & Diagnostic Endpoints
 
-### 1.1 获取系统运行状态
-- **请求方法**：`GET`
-- **接口路径**：`/api/status`
-- **响应示例**：
+### 1.1 Get System Status
+- **Method**: `GET`
+- **Path**: `/api/status`
+- **Response Example**:
 ```json
 {
   "running": true,
@@ -24,10 +26,10 @@ ParentControl Daemon 内置轻量级 HTTP API 服务，支持外部系统、移�
 }
 ```
 
-### 1.2 获取局域网已探测设备列表
-- **请求方法**：`GET`
-- **接口路径**：`/api/devices`
-- **响应示例**：
+### 1.2 List Discovered LAN Devices
+- **Method**: `GET`
+- **Path**: `/api/devices`
+- **Response Example**:
 ```json
 [
   {
@@ -44,10 +46,10 @@ ParentControl Daemon 内置轻量级 HTTP API 服务，支持外部系统、移�
 ]
 ```
 
-### 1.3 获取 DPI 应用分类与特征列表
-- **请求方法**：`GET`
-- **接口路径**：`/api/apps`
-- **响应示例**：
+### 1.3 List DPI Application Categories & Signatures
+- **Method**: `GET`
+- **Path**: `/api/apps`
+- **Response Example**:
 ```json
 [
   {
@@ -66,20 +68,20 @@ ParentControl Daemon 内置轻量级 HTTP API 服务，支持外部系统、移�
 
 ---
 
-## 2. 成员管控接口
+## 2. Family Member & Policy Management
 
-### 2.1 获取所有受管成员列表
-- **请求方法**：`GET`
-- **接口路径**：`/api/members`
+### 2.1 List All Managed Members
+- **Method**: `GET`
+- **Path**: `/api/members`
 
-### 2.2 创建或更新受管成员
-- **请求方法**：`POST`
-- **接口路径**：`/api/members`
-- **请求体格式**：
+### 2.2 Create or Update a Member
+- **Method**: `POST`
+- **Path**: `/api/members`
+- **Request Body**:
 ```json
 {
   "id": "m_xiaoming",
-  "name": "小明",
+  "name": "Tom",
   "avatar": "boy",
   "device_macs": [
     "F0:18:98:AA:BB:CC"
@@ -100,34 +102,34 @@ ParentControl Daemon 内置轻量级 HTTP API 服务，支持外部系统、移�
 }
 ```
 
-### 2.3 删除受管成员
-- **请求方法**：`DELETE`
-- **接口路径**：`/api/members/{member_id}`
+### 2.3 Delete a Member
+- **Method**: `DELETE`
+- **Path**: `/api/members/{member_id}`
 
-### 2.4 一键断网
-- **请求方法**：`POST`
-- **接口路径**：`/api/members/{member_id}/lock`
+### 2.4 Instant Internet Lock
+- **Method**: `POST`
+- **Path**: `/api/members/{member_id}/lock`
 
-### 2.5 恢复上网
-- **请求方法**：`POST`
-- **接口路径**：`/api/members/{member_id}/unlock`
+### 2.5 Resume / Unlock Internet Access
+- **Method**: `POST`
+- **Path**: `/api/members/{member_id}/unlock`
 
-### 2.6 奖励加时
-- **请求方法**：`POST`
-- **接口路径**：`/api/members/{member_id}/bonus?minutes=30`
+### 2.6 Reward Bonus Time
+- **Method**: `POST`
+- **Path**: `/api/members/{member_id}/bonus?minutes=30`
 
 ---
 
-## 3. 全局设置接口
+## 3. Global Settings Endpoints
 
-### 3.1 获取全局安全设置
-- **请求方法**：`GET`
-- **接口路径**：`/api/settings`
+### 3.1 Get Global Settings
+- **Method**: `GET`
+- **Path**: `/api/settings`
 
-### 3.2 保存全局安全设置
-- **请求方法**：`POST`
-- **接口路径**：`/api/settings`
-- **请求体格式**：
+### 3.2 Update Global Settings
+- **Method**: `POST`
+- **Path**: `/api/settings`
+- **Request Body**:
 ```json
 {
   "enabled": true,

@@ -1,46 +1,73 @@
-# OpenWrt 细粒度家长控制系统 (ParentControl Guard)
+# ParentControl Guard for OpenWrt
 
-基于 Go 语言与 `kmod-oaf` 内核深度包检测 (DPI) 引擎开发的 OpenWrt 细粒度家长控制与应用安全管控系统。
+[English](README.md) | [简体中文](README_zh.md)
 
-## ✨ 核心特性
+A modern, high-performance, and fine-grained Parental Control & Application Security Management System for OpenWrt, powered by Go and the `kmod-oaf` Deep Packet Inspection (DPI) kernel module.
 
-- **📱 现代独立 Web 控制台**：零外部依赖，移动端优先，支持手机浏览器便捷管理、大卡片一键断网、加时奖励及配额滑块。
-- **🎮 深度应用识别与封禁 (L7 DPI)**：基于内核级 DPI 模块与特征库，精准识别和封禁游戏（王者荣耀、和平精英、原神、Steam）、短视频（抖音、快手、小红书）、社交、直播等数十个大类、数百款具体 App。
-- **⏱️ 细粒度时间与配额控制**：
-  - 支持按周天/时间区间自定义禁网计划（支持跨夜）。
-  - 基于真实流量活跃度的每日时长限额（Quota）。
-  - 支持一键断网 (Instant Lock) 与临时加时奖励 (Bonus Time)。
-- **🛡️ 域名安全与防绕过体系**：
-  - 强制锁定 Google、Bing、Baidu、YouTube 青少年安全搜索 (SafeSearch)。
-  - 53 端口强制重定向本地，封锁外部公共 DoH/DoT，杜绝私自修改 DNS 绕过。
-  - 新设备隔离模式，防御 MAC 随机化逃避监管。
-- **⚙️ LuCI 原生支持**：提供 `luci-app-parentcontrol` 插件，无缝集成至 OpenWrt 系统菜单。
+---
 
-## 📁 目录结构
+## ✨ Features
+
+- **📱 Modern Responsive Web Dashboard**: Mobile-first, single-binary embedded Web UI with zero external runtime dependencies. Instant lock toggles, bonus time rewards, and quota sliders.
+- **🎮 Deep L7 Application Blocking (DPI)**: Powered by kernel-level packet inspection to accurately identify and restrict hundreds of popular apps across categories (e.g., Honor of Kings, Genshin Impact, Steam, TikTok, YouTube, Discord).
+- **⏱️ Fine-Grained Time & Quota Management**:
+  - Flexible schedule rules by day and time window (with overnight span support).
+  - Daily active-traffic-driven time quota (token bucket).
+  - Instant actions: One-click Internet Lock & temporary Bonus Time allowance (e.g., +30 mins).
+- **🛡️ Content Filtering & Anti-Bypass System**:
+  - Enforced SafeSearch on Google, Bing, Baidu, and YouTube.
+  - Forced local port 53 DNS redirection and blocked public DoH/DoT servers to prevent DNS evasion.
+  - New device quarantine mode to defend against MAC address randomization bypasses.
+- **⚙️ Native LuCI Integration**: Seamless integration into the OpenWrt administration interface via `luci-app-parentcontrol`.
+
+---
+
+## 📁 Repository Structure
 
 ```text
-├── cmd/parentcontrold/       # 核心守护进程入口
+├── cmd/parentcontrold/       # Main daemon entrypoint
 ├── internal/
-│   ├── api/                  # RESTful HTTP API 与 Web 路由
-│   ├── config/               # 配置存储与持久化
-│   ├── device/               # 局域网设备探测 (ARP/DHCP) 与流量采集
-│   ├── dpi/                  # kmod-oaf 内核驱动与特征库解析
-│   ├── firewall/             # iptables 动态规则链与防绕过
-│   ├── models/               # 数据模型定义
-│   ├── quota/                # 活跃时长统计与配额调度引擎
-│   └── safedns/              # dnsmasq 协同与 SafeSearch 拦截
-├── web/                      # 现代化独立 Web 控制台前端源码 (Go embed 内嵌)
-├── rootfs/                   # OpenWrt 部署文件 (init.d 服务、LuCI 菜单与 ACL)
-├── scripts/                  # 编译与一键部署脚本
+│   ├── api/                  # RESTful HTTP API and static file server
+│   ├── config/               # Configuration management and persistence
+│   ├── device/               # LAN device discovery (ARP/DHCP) & traffic metrics
+│   ├── dpi/                  # kmod-oaf kernel driver & signature parser
+│   ├── firewall/             # iptables rule management & anti-bypass filters
+│   ├── models/               # Core data structures and models
+│   ├── quota/                # Time tracking and quota policy engine
+│   └── safedns/              # dnsmasq configuration & SafeSearch enforcement
+├── web/                      # Responsive Web UI source code (embedded via Go embed)
+├── rootfs/                   # OpenWrt filesystem files (init.d service, LuCI menu & ACL)
+├── scripts/                  # Cross-compilation and automated deployment scripts
+├── docs/                     # Detailed architectural, API, and deployment documentation
 └── Makefile
 ```
 
-## 🚀 编译与部署
+---
 
+## 📚 Documentation
+
+- [Architecture & Design](docs/ARCHITECTURE.md) ([中文版](docs/ARCHITECTURE_zh.md))
+- [RESTful API Reference](docs/API.md) ([中文版](docs/API_zh.md))
+- [Deployment & Operations Guide](docs/DEPLOYMENT.md) ([中文版](docs/DEPLOYMENT_zh.md))
+
+---
+
+## 🚀 Quick Start & Deployment
+
+### Automated One-Click Deployment
+Ensure your local machine has Go installed, then execute:
 ```bash
-# 1. 赋予部署脚本权限并部署至目标路由器
 chmod +x scripts/deploy.sh
 ./scripts/deploy.sh
 ```
 
-部署完成后，即可通过浏览器访问：`http://<路由器IP>:8088` 进入管理控制台。
+Once deployment completes, open your browser and navigate to:
+```text
+http://<Router-IP>:8088
+```
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License.

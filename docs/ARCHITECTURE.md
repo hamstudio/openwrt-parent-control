@@ -1,34 +1,36 @@
-# 系统架构与实现原理设计 (Architecture Design)
+# Architecture & System Design
 
-本文档详细描述 OpenWrt 细粒度家长控制系统 (ParentControl Guard) 的整体技术架构、数据流向及底层网络控制原理。
+[English](ARCHITECTURE.md) | [简体中文](ARCHITECTURE_zh.md)
+
+This document provides a comprehensive overview of the architecture, packet processing pipeline, and internal mechanisms of ParentControl Guard for OpenWrt.
 
 ---
 
-## 1. 整体技术分层
+## 1. High-Level Architecture
 
-系统由 **用户交互层 (Web & LuCI)**、**核心守护进程 (Go Daemon)**、**系统配置层 (Config Store)** 以及 **底层网络执行层 (iptables & kmod-oaf & dnsmasq)** 四层协同构成：
+The system consists of four distinct layers: **User Interface**, **Core Go Daemon**, **Configuration Store**, and the **Kernel/Network Enforcement Layer**.
 
 ```mermaid
 flowchart TB
-    subgraph UI_Layer [用户交互层]
-        WebUI[📱 现代响应式 Web 控制台 (端口 8088)]
-        LuCI[⚙️ LuCI 原生菜单插件]
+    subgraph UI_Layer [User Interface Layer]
+        WebUI[📱 Modern Responsive Web Dashboard (Port 8088)]
+        LuCI[⚙️ Native LuCI Menu Plugin]
     end
 
-    subgraph Daemon_Layer [Go 核心守护进程 parentcontrold]
-        APIServer[RESTful API 服务]
-        DeviceTracker[设备自动发现与流量采集]
-        QuotaEngine[活跃时长统计与配额引擎]
-        PolicyEngine[策略评估与防火墙/DPI下发]
+    subgraph Daemon_Layer [Core Go Daemon - parentcontrold]
+        APIServer[RESTful API Engine]
+        DeviceTracker[Device Discovery & Traffic Collector]
+        QuotaEngine[Active Time Tracker & Token Bucket Engine]
+        PolicyEngine[Rule Evaluator & Netfilter Dispatcher]
     end
 
-    subgraph Config_Layer [配置持久化]
+    subgraph Config_Layer [Configuration & Persistence]
         ConfigFile[/etc/parentcontrol/config.json]
     end
 
-    subgraph Kernel_Network [底层网络栈与执行层]
-        OAFEngine[kmod-oaf 内核 DPI 模块]
-        DevAppfilter[/dev/appfilter 字符设备]
+    subgraph Kernel_Network [Kernel & Network Enforcement Layer]
+        OAFEngine[kmod-oaf Kernel DPI Module]
+        DevAppfilter[/dev/appfilter Character Device]
         IPTablesForward[iptables PARENT_CONTROL_FWD]
         IPTablesNat[iptables PARENT_CONTROL_NAT_PRE]
         DnsmasqConf[/tmp/dnsmasq.d/parentcontrol.conf]
@@ -50,33 +52,33 @@ flowchart TB
 
 ---
 
-## 2. 核心网络控制机制
+## 2. Core Network Enforcement Mechanisms
 
-### 2.1 流量拦截流水线 (Forward Chain Pipeline)
-当数据包从局域网终端进入路由器转发链 (`FORWARD`) 时：
-1. **优先进入自定义链**：`PARENT_CONTROL_FWD` 挂载于 `FORWARD` 链首部。
-2. **防绕过审查**：
-   - 阻断 DoT (TCP/UDP 853 端口)。
-   - 阻断公网知名 DoH IP（如 `1.1.1.1`, `8.8.8.8` 等）。
-3. **受管状态判定**：
-   - 若设备被**一键断网 (Locked)** -> `DROP`。
-   - 若设备**每日配额耗尽**且未处于**加时状态 (Bonus Time)** -> `DROP`。
-   - 若设备处于**禁网时间段**内且未处于**加时状态** -> `DROP`。
+### 2.1 Packet Filtering Pipeline (`FORWARD` Chain)
+When packets arrive from local clients and traverse the Linux routing table (`FORWARD` chain):
+1. **Custom Chain Priority**: The custom chain `PARENT_CONTROL_FWD` is prepended to the top of the `FORWARD` chain.
+2. **Anti-Bypass Inspection**:
+   - Blocks DNS-over-TLS (TCP/UDP port 853).
+   - Blocks public DoH provider IPs (e.g., `1.1.1.1`, `8.8.8.8`, etc.) over port 443.
+3. **Managed State Evaluation**:
+   - If a member is **Locked** -> Drop all traffic.
+   - If a member has exhausted their **Daily Quota** (and has no active **Bonus Time**) -> Drop all traffic.
+   - If current time matches a **Scheduled Block Window** (and has no active **Bonus Time**) -> Drop all traffic.
 
-### 2.2 深度包检测 (L7 DPI) 交互机制
-1. 内核模块 `kmod-oaf` 拦截经过网络协议栈的数据包，进行特征码匹配（SNI、协议头、目的 IP/端口）。
-2. `parentcontrold` 启动时读取 `/etc/appfilter/feature_cn.cfg`，解析应用 ID 与分类。
-3. 动态配置通过向 `/dev/appfilter` 写入 JSON 指令实现：
-   - `op: 3` -> 清空现有规则。
-   - `op: 1` -> 下发封禁的 App ID 列表 (`{"apps": [2001, 2002, ...]}`)。
-   - `op: 4` -> 下发受管设备的 MAC 列表 (`{"mac_list": ["AA:BB:CC:..."]}`)。
+### 2.2 Deep Packet Inspection (L7 DPI via `kmod-oaf`)
+1. The kernel module `kmod-oaf` hooks into the netfilter architecture to analyze application protocol headers, TLS Server Name Indication (SNI), and destination ports.
+2. `parentcontrold` parses signature definitions from `/etc/appfilter/feature_cn.cfg`.
+3. Rules are dynamically loaded into kernel space via JSON commands sent to `/dev/appfilter`:
+   - `op: 3` -> Clear existing rules.
+   - `op: 1` -> Load list of blocked application IDs (`{"apps": [2001, 2002, ...]}`).
+   - `op: 4` -> Load list of managed MAC addresses (`{"mac_list": ["AA:BB:CC:..."]}`).
 
-### 2.3 SafeSearch 与 DNS 强制劫持
-1. **53 端口强制重定向**：
-   - 在 `nat` 表的 `PREROUTING` 链挂载 `PARENT_CONTROL_NAT_PRE`，将所有目标为外部 53 端口的请求重定向到本地 53 端口 (`REDIRECT --to-ports 53`)。
-2. **搜索引擎安全搜索 (SafeSearch)**：
-   - 生成 `/tmp/dnsmasq.d/parentcontrol.conf`：
-     - Google: 重写至 `forcesafesearch.google.com` (216.239.38.120)。
-     - Bing: 重写至 `strict.bing.com` (204.79.197.220)。
-     - YouTube: 重写至 `restrict.youtube.com` (216.239.38.119)。
-   - 向 `dnsmasq` 发送 `SIGHUP` 信号实现平滑无缝热重载。
+### 2.3 SafeSearch & DNS Redirection
+1. **Forced Port 53 Redirection**:
+   - An iptables rule in `PARENT_CONTROL_NAT_PRE` redirects all outbound TCP/UDP port 53 traffic to the local router's resolver (`REDIRECT --to-ports 53`).
+2. **Search Engine SafeSearch**:
+   - Generates `/tmp/dnsmasq.d/parentcontrol.conf`:
+     - Google: Redirected to `forcesafesearch.google.com` (216.239.38.120).
+     - Bing: Redirected to `strict.bing.com` (204.79.197.220).
+     - YouTube: Redirected to `restrict.youtube.com` (216.239.38.119).
+   - Reloads dnsmasq gracefully via `SIGHUP`.
