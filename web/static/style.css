@@ -1,0 +1,28 @@
+/* 自定义增强样式 */
+@layer utilities {
+    /* 滚动条美化 */
+    ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+        background: rgba(156, 163, 175, 0.4);
+        border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        background: rgba(156, 163, 175, 0.7);
+    }
+}
+
+.avatar-badge {
+    font-size: 1.75rem;
+    line-height: 2.25rem;
+}
+
+/* 进度条动画 */
+.transition-width {
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
