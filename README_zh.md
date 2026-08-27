@@ -49,6 +49,7 @@
 - [系统架构与原理](docs/ARCHITECTURE_zh.md) ([English](docs/ARCHITECTURE.md))
 - [RESTful API 规范](docs/API_zh.md) ([English](docs/API.md))
 - [部署与运维指南](docs/DEPLOYMENT_zh.md) ([English](docs/DEPLOYMENT.md))
+- [常见问题解答 (FAQ)](docs/FAQ_zh.md) ([English](docs/FAQ.md))
 - [Android 端复用 Swift 核心逻辑指南](docs/ANDROID_SWIFT_INTEROP_zh.md) ([English](docs/ANDROID_SWIFT_INTEROP.md))
 
 ---

@@ -49,6 +49,7 @@ A modern, high-performance, and fine-grained Parental Control & Application Secu
 - [Architecture & Design](docs/ARCHITECTURE.md) ([中文版](docs/ARCHITECTURE_zh.md))
 - [RESTful API Reference](docs/API.md) ([中文版](docs/API_zh.md))
 - [Deployment & Operations Guide](docs/DEPLOYMENT.md) ([中文版](docs/DEPLOYMENT_zh.md))
+- [Frequently Asked Questions (FAQ)](docs/FAQ.md) ([中文版](docs/FAQ_zh.md))
 - [Android Swift Core Interop Guide](docs/ANDROID_SWIFT_INTEROP.md) ([中文版](docs/ANDROID_SWIFT_INTEROP_zh.md))
 
 ---
