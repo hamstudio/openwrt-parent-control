@@ -67,6 +67,8 @@ func (s *Server) Start(port int) error {
 	mux.HandleFunc("/api/members", s.requireAuth(s.handleMembers))
 	mux.HandleFunc("/api/members/", s.requireAuth(s.handleMemberActions))
 	mux.HandleFunc("/api/apps", s.requireAuth(s.handleApps))
+	mux.HandleFunc("/api/apps/", s.requireAuth(s.handleAppActions))
+	mux.HandleFunc("/api/categories", s.requireAuth(s.handleCategories))
 	mux.HandleFunc("/api/settings", s.requireAuth(s.handleSettings))
 
 	// 3. 静态文件与前端 WebUI
@@ -189,8 +191,66 @@ func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleApps(w http.ResponseWriter, r *http.Request) {
-	categories := s.dpiMgr.GetCategories()
-	s.jsonResponse(w, http.StatusOK, categories)
+	switch r.Method {
+	case http.MethodGet:
+		categories := s.dpiMgr.GetCategories()
+		s.jsonResponse(w, http.StatusOK, categories)
+	case http.MethodPost:
+		var app models.AppInfo
+		if err := json.NewDecoder(r.Body).Decode(&app); err != nil {
+			s.jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "Invalid payload"})
+			return
+		}
+		added, err := s.dpiMgr.AddApp(app)
+		if err != nil {
+			s.jsonResponse(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		s.jsonResponse(w, http.StatusOK, added)
+	default:
+		s.jsonResponse(w, http.StatusMethodNotAllowed, map[string]string{"error": "Method not allowed"})
+	}
+}
+
+func (s *Server) handleAppActions(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/apps/")
+	appID, err := strconv.Atoi(path)
+	if err != nil {
+		s.jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "Invalid app ID"})
+		return
+	}
+
+	if r.Method == http.MethodDelete {
+		if err := s.dpiMgr.DeleteApp(appID); err != nil {
+			s.jsonResponse(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		s.jsonResponse(w, http.StatusOK, map[string]string{"status": "deleted"})
+		return
+	}
+	s.jsonResponse(w, http.StatusMethodNotAllowed, map[string]string{"error": "Method not allowed"})
+}
+
+func (s *Server) handleCategories(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		categories := s.dpiMgr.GetCategories()
+		s.jsonResponse(w, http.StatusOK, categories)
+	case http.MethodPost:
+		var cat models.AppCategory
+		if err := json.NewDecoder(r.Body).Decode(&cat); err != nil {
+			s.jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "Invalid payload"})
+			return
+		}
+		added, err := s.dpiMgr.AddCategory(cat)
+		if err != nil {
+			s.jsonResponse(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		s.jsonResponse(w, http.StatusOK, added)
+	default:
+		s.jsonResponse(w, http.StatusMethodNotAllowed, map[string]string{"error": "Method not allowed"})
+	}
 }
 
 func (s *Server) handleMembers(w http.ResponseWriter, r *http.Request) {

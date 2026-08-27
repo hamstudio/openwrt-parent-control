@@ -1,11 +1,12 @@
-// 家长控制系统前端交互逻辑
+// 家长控制系统前端交互逻辑 - 完整全功能版
 let appState = {
     members: [],
     devices: [],
     categories: [],
     settings: {},
     status: {},
-    currentPinInput: ''
+    currentPinInput: '',
+    editingAppCatId: null
 };
 
 // 获取已存储的 PIN 码
@@ -35,7 +36,6 @@ async function authFetch(url, options = {}) {
 
     const res = await fetch(url, options);
     if (res.status === 401) {
-        // 需要验证 PIN 码
         openPinLockModal();
         throw new Error('Unauthorized: PIN code required');
     }
@@ -87,7 +87,7 @@ function updatePinDots() {
     for (let i = 0; i < 4; i++) {
         const dot = document.getElementById('pinDot' + i);
         if (i < len) {
-            dot.className = 'w-3.5 h-3.5 rounded-full bg-indigo-600 border-2 border-indigo-600 scale-110 transition-all';
+            dot.className = 'w-3.5 h-3.5 rounded-full bg-emerald-600 border-2 border-emerald-600 scale-110 transition-all';
         } else {
             dot.className = 'w-3.5 h-3.5 rounded-full border-2 border-slate-300 dark:border-slate-600 transition-all';
         }
@@ -107,7 +107,7 @@ async function submitPinVerification() {
             setStoredPin(enteredPin);
             closePinLockModal();
             showToast('身份验证成功', 'success');
-            await Promise.all([fetchStatus(), fetchMembers(), fetchDevices(), fetchSettings()]);
+            await Promise.all([fetchStatus(), fetchMembers(), fetchDevices(), fetchCategories(), fetchSettings()]);
             lucide.createIcons();
         } else {
             showToast('密码错误，请重新输入', 'error');
@@ -160,13 +160,11 @@ function showToast(message, type = 'success') {
     container.appendChild(toast);
     lucide.createIcons();
 
-    // 触发进入动画
     requestAnimationFrame(() => {
         toast.classList.remove('toast-enter');
         toast.classList.add('toast-active');
     });
 
-    // 3秒后退出并移除
     setTimeout(() => {
         toast.classList.remove('toast-active');
         toast.classList.add('toast-exit');
@@ -182,7 +180,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     lucide.createIcons();
     await fetchStatus();
 
-    // 如果启用了 PIN 且本地没有存储 PIN，则先锁屏提示输入
     if (appState.status && appState.status.pin_required && !getStoredPin()) {
         openPinLockModal();
     } else {
@@ -195,7 +192,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     lucide.createIcons();
 
-    // 5秒轮询刷新状态与设备
+    // 5秒轮询
     setInterval(async () => {
         if (document.getElementById('pinLockModal').classList.contains('hidden')) {
             await Promise.all([fetchStatus(), fetchMembers(), fetchDevices()]);
@@ -204,7 +201,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, 5000);
 });
 
-// 主题切换
 function initTheme() {
     const isDark = localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
     if (isDark) {
@@ -219,20 +215,45 @@ function initTheme() {
     });
 }
 
-// 标签页切换
 function switchTab(tab) {
-    const tabs = ['members', 'devices', 'settings'];
+    const tabs = ['members', 'devices', 'apps', 'settings'];
     tabs.forEach(t => {
         const el = document.getElementById('tab' + capitalize(t));
         const btn = document.getElementById('tabBtn' + capitalize(t));
+        if (!el || !btn) return;
+
         if (t === tab) {
             el.classList.remove('hidden');
-            btn.className = 'px-4 py-2 text-sm font-semibold rounded-xl bg-indigo-600 text-white shadow-sm transition';
+            btn.className = 'px-4 py-2 text-sm font-semibold rounded-xl bg-emerald-600 text-white shadow-sm transition whitespace-nowrap';
+            if (t === 'apps') {
+                btn.className += ' flex items-center space-x-1.5';
+            }
         } else {
             el.classList.add('hidden');
-            btn.className = 'px-4 py-2 text-sm font-semibold rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition';
+            btn.className = 'px-4 py-2 text-sm font-semibold rounded-xl text-slate-600 dark:text-slate-300 hover:bg-emerald-50 dark:hover:bg-slate-800 transition whitespace-nowrap';
+            if (t === 'apps') {
+                btn.className += ' flex items-center space-x-1.5';
+            }
         }
     });
+
+    const addMemberBtn = document.getElementById('addMemberBtn');
+    const addAppBtn = document.getElementById('addAppBtn');
+    if (tab === 'apps') {
+        if (addMemberBtn) addMemberBtn.classList.add('hidden');
+        if (addAppBtn) {
+            addAppBtn.classList.remove('hidden');
+            addAppBtn.classList.add('flex');
+        }
+        renderAppManagement();
+    } else {
+        if (addMemberBtn) addMemberBtn.classList.remove('hidden');
+        if (addAppBtn) {
+            addAppBtn.classList.add('hidden');
+            addAppBtn.classList.remove('flex');
+        }
+    }
+
     lucide.createIcons();
 }
 
@@ -240,7 +261,7 @@ function capitalize(s) {
     return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-// API 请求与渲染
+// API 数据拉取
 async function fetchStatus() {
     const start = performance.now();
     try {
@@ -252,6 +273,8 @@ async function fetchStatus() {
         document.getElementById('statMembers').innerText = data.managed_members;
         document.getElementById('statDevices').innerText = `${data.active_devices} / ${data.total_devices}`;
         document.getElementById('statApps').innerText = data.app_count;
+        const tabBadge = document.getElementById('tabAppCountBadge');
+        if (tabBadge) tabBadge.innerText = data.app_count;
 
         const latencyBadge = document.getElementById('latencyBadge');
         if (latencyBadge) {
@@ -274,10 +297,10 @@ async function fetchStatus() {
 
         const badge = document.getElementById('kernelStatusBadge');
         if (data.kernel_dpi_ready) {
-            badge.className = 'hidden md:flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800';
+            badge.className = 'hidden md:flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800';
             badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span><span>kmod-oaf DPI 引擎运行中</span>';
         } else {
-            badge.className = 'hidden md:flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400 border border-amber-200 dark:border-amber-800';
+            badge.className = 'hidden md:flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-200 dark:border-amber-800';
             badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-500"></span><span>kmod-oaf 未加载 (规则降级)</span>';
         }
     } catch (e) {
@@ -293,7 +316,7 @@ async function fetchStatus() {
 async function fetchCategories() {
     try {
         const res = await authFetch('/api/apps');
-        appState.categories = await res.json();
+        appState.categories = await res.json() || [];
     } catch (e) {
         console.error('Fetch apps failed:', e);
     }
@@ -346,14 +369,12 @@ function renderMembers() {
     emptyEl.classList.add('hidden');
 
     container.innerHTML = appState.members.map(m => {
-        // 计算配额进度
         const quota = m.quota_minutes || 0;
         const used = m.used_minutes || 0;
         const percent = quota > 0 ? Math.min(100, Math.round((used / quota) * 100)) : 0;
         const isQuotaExceeded = quota > 0 && used >= quota;
         const isBonus = m.bonus_until && new Date(m.bonus_until) > new Date();
 
-        // 边框高亮样式
         let cardBorderClass = 'border-slate-200/80 dark:border-slate-700/80';
         if (m.is_locked) {
             cardBorderClass = 'border-locked';
@@ -361,7 +382,6 @@ function renderMembers() {
             cardBorderClass = 'border-bonus';
         }
 
-        // 状态徽章
         let statusBadge = '<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400">正常上网</span>';
         if (m.is_locked) {
             statusBadge = '<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-400 flex items-center space-x-1"><i data-lucide="lock" class="w-3 h-3"></i><span>已一键断网</span></span>';
@@ -371,20 +391,14 @@ function renderMembers() {
             statusBadge = '<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700 dark:bg-orange-950/60 dark:text-orange-400">配额已耗尽</span>';
         }
 
-        // 头像映射
-        const avatarMap = {
-            boy: '👦',
-            girl: '👧',
-            student: '🧑‍🎓',
-            child: '👶'
-        };
+        const avatarMap = { boy: '👦', girl: '👧', student: '🧑‍🎓', child: '👶' };
         const avatarEmoji = avatarMap[m.avatar] || '👦';
 
         return `
             <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 border ${cardBorderClass} shadow-sm flex flex-col justify-between space-y-4 transition-all duration-200">
                 <div class="flex items-start justify-between">
                     <div class="flex items-center space-x-3">
-                        <div class="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center avatar-badge border border-indigo-100 dark:border-indigo-900">
+                        <div class="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center avatar-badge border border-emerald-100 dark:border-emerald-900">
                             ${avatarEmoji}
                         </div>
                         <div>
@@ -395,23 +409,21 @@ function renderMembers() {
                             <p class="text-xs text-slate-400 mt-0.5">绑定 ${m.device_macs ? m.device_macs.length : 0} 台设备 · 封禁 ${m.blocked_app_ids ? m.blocked_app_ids.length : 0} 款 App</p>
                         </div>
                     </div>
-                    <button onclick="editMember('${m.id}')" class="p-2 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-700 transition" title="编辑规则">
+                    <button onclick="editMember('${m.id}')" class="p-2 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-700 transition" title="编辑规则">
                         <i data-lucide="sliders" class="w-4 h-4"></i>
                     </button>
                 </div>
 
-                <!-- 配额使用进度条 -->
                 <div class="space-y-1.5 bg-slate-50 dark:bg-slate-900/40 p-3 rounded-xl border border-slate-100 dark:border-slate-700/50">
                     <div class="flex justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
                         <span>今日已用活跃时长</span>
                         <span><b>${used}</b> / ${quota > 0 ? quota + ' 分钟' : '不限时'}</span>
                     </div>
                     <div class="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
-                        <div class="h-full rounded-full transition-width ${percent > 90 ? 'bg-red-500' : percent > 70 ? 'bg-amber-500' : 'bg-indigo-600'}" style="width: ${percent}%"></div>
+                        <div class="h-full rounded-full transition-width ${percent > 90 ? 'bg-red-500' : percent > 70 ? 'bg-amber-500' : 'bg-emerald-600'}" style="width: ${percent}%"></div>
                     </div>
                 </div>
 
-                <!-- 底部快捷控制按钮组 -->
                 <div class="grid grid-cols-2 gap-2 pt-1">
                     ${m.is_locked ? `
                         <button onclick="unlockMember('${m.id}')" class="flex items-center justify-center space-x-1.5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white text-xs font-semibold shadow-sm transition">
@@ -457,11 +469,10 @@ function renderDevices(filterKeyword = '') {
     }
 
     tbody.innerHTML = filtered.map(d => {
-        // 查找归属成员
         let memberName = '<span class="text-slate-400 text-xs">未分配</span>';
         const member = appState.members.find(m => m.device_macs && m.device_macs.includes(d.mac));
         if (member) {
-            memberName = `<span class="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 font-medium text-xs">${member.name}</span>`;
+            memberName = `<span class="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 font-medium text-xs">${member.name}</span>`;
         }
 
         const speedText = d.rx_rate >= 1024 * 1024 
@@ -477,10 +488,10 @@ function renderDevices(filterKeyword = '') {
                 <td class="px-4 py-3 font-mono text-xs">${d.ip || '-'}</td>
                 <td class="px-4 py-3 font-mono text-xs text-slate-500 dark:text-slate-400">${d.mac}</td>
                 <td class="px-4 py-3 text-xs">${d.vendor || '通用设备'}</td>
-                <td class="px-4 py-3 text-xs font-mono text-indigo-600 dark:text-indigo-400 font-semibold">${d.online ? speedText : '-'}</td>
+                <td class="px-4 py-3 text-xs font-mono text-emerald-600 dark:text-emerald-400 font-semibold">${d.online ? speedText : '-'}</td>
                 <td class="px-4 py-3">${memberName}</td>
                 <td class="px-4 py-3 text-right">
-                    <button onclick="quickAssignDevice('${d.mac}')" class="text-indigo-600 hover:text-indigo-700 text-xs font-semibold hover:underline">分配成员</button>
+                    <button onclick="quickAssignDevice('${d.mac}')" class="text-emerald-600 hover:text-emerald-700 text-xs font-semibold hover:underline">分配成员</button>
                 </td>
             </tr>
         `;
@@ -490,6 +501,176 @@ function renderDevices(filterKeyword = '') {
 function filterDevicesTable() {
     const input = document.getElementById('deviceSearchInput');
     renderDevices(input ? input.value.trim() : '');
+}
+
+// 渲染特征库管理 (DPI 应用管理 Tab)
+function renderAppManagement(keyword = '') {
+    const container = document.getElementById('appsManagementContainer');
+    if (!container) return;
+
+    if (!appState.categories || appState.categories.length === 0) {
+        container.innerHTML = '<div class="text-center py-12 text-slate-400">特征库加载中...</div>';
+        return;
+    }
+
+    const kw = keyword.toLowerCase();
+
+    container.innerHTML = appState.categories.map(cat => {
+        const filteredApps = cat.apps.filter(app => !kw || app.name.toLowerCase().includes(kw));
+        if (kw && filteredApps.length === 0) return '';
+
+        const appsHTML = filteredApps.map(app => `
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700/60 hover:border-emerald-500 transition">
+                <div class="flex items-center space-x-2">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    <span class="font-medium text-xs text-slate-800 dark:text-slate-100">${app.name}</span>
+                    <span class="text-[10px] text-slate-400 font-mono">#${app.id}</span>
+                </div>
+                <button onclick="deleteApp(${app.id})" class="text-slate-400 hover:text-rose-500 transition" title="删除该应用特征">
+                    <i data-lucide="trash" class="w-3.5 h-3.5"></i>
+                </button>
+            </div>
+        `).join('');
+
+        return `
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
+                <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 pb-3">
+                    <div class="flex items-center space-x-2.5">
+                        <div class="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center">
+                            <i data-lucide="${cat.icon || 'grid'}" class="w-4 h-4"></i>
+                        </div>
+                        <h4 class="font-bold text-sm text-slate-800 dark:text-white">${cat.class_zh}</h4>
+                        <span class="text-xs text-slate-400 font-mono">(${filteredApps.length} 款)</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="openAppModal(${cat.class_id})" class="text-xs text-emerald-600 hover:text-emerald-700 font-semibold flex items-center space-x-1">
+                            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                            <span>添加应用</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                    ${appsHTML}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    lucide.createIcons();
+}
+
+function filterAppsGrid() {
+    const input = document.getElementById('appFilterInput');
+    renderAppManagement(input ? input.value.trim() : '');
+}
+
+// 应用与分类创建 Modal
+function openAppModal(classId = null) {
+    const modal = document.getElementById('appModal');
+    const select = document.getElementById('formAppCategory');
+    select.innerHTML = appState.categories.map(c => `
+        <option value="${c.class_id}" ${classId === c.class_id ? 'selected' : ''}>${c.class_zh}</option>
+    `).join('');
+
+    document.getElementById('formAppId').value = '';
+    document.getElementById('formAppName').value = '';
+    document.getElementById('formAppDescription').value = '';
+    modal.classList.remove('hidden');
+    lucide.createIcons();
+}
+
+function closeAppModal() {
+    document.getElementById('appModal').classList.add('hidden');
+}
+
+async function saveAppForm() {
+    const name = document.getElementById('formAppName').value.trim();
+    const classId = parseInt(document.getElementById('formAppCategory').value);
+    if (!name) {
+        showToast('请输入应用名称！', 'warning');
+        return;
+    }
+
+    const payload = {
+        name: name,
+        class_id: classId
+    };
+
+    try {
+        const res = await authFetch('/api/apps', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+            closeAppModal();
+            showToast('新应用特征已成功添加！', 'success');
+            await fetchCategories();
+            renderAppManagement();
+        } else {
+            showToast('添加失败', 'error');
+        }
+    } catch (e) {
+        showToast('请求失败', 'error');
+    }
+}
+
+async function deleteApp(appId) {
+    if (!confirm('确定要删除该应用特征吗？')) return;
+    try {
+        const res = await authFetch(`/api/apps/${appId}`, { method: 'DELETE' });
+        if (res.ok) {
+            showToast('应用特征已删除', 'info');
+            await fetchCategories();
+            renderAppManagement();
+        } else {
+            showToast('删除失败', 'error');
+        }
+    } catch (e) {
+        showToast('请求失败', 'error');
+    }
+}
+
+function openCategoryModal() {
+    document.getElementById('formCategoryName').value = '';
+    document.getElementById('categoryModal').classList.remove('hidden');
+    lucide.createIcons();
+}
+
+function closeCategoryModal() {
+    document.getElementById('categoryModal').classList.add('hidden');
+}
+
+async function saveCategoryForm() {
+    const name = document.getElementById('formCategoryName').value.trim();
+    const icon = document.getElementById('formCategoryIcon').value;
+    if (!name) {
+        showToast('请输入分类名称！', 'warning');
+        return;
+    }
+
+    const payload = {
+        name: name,
+        icon: icon
+    };
+
+    try {
+        const res = await authFetch('/api/categories', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+            closeCategoryModal();
+            showToast('新分类已创建！', 'success');
+            await fetchCategories();
+            renderAppManagement();
+        } else {
+            showToast('创建分类失败', 'error');
+        }
+    } catch (e) {
+        showToast('请求失败', 'error');
+    }
 }
 
 // 加时弹窗控制
@@ -572,9 +753,9 @@ function renderModalDevices(selectedMACs = []) {
     container.innerHTML = appState.devices.map(d => {
         const isChecked = selectedMACs && selectedMACs.includes(d.mac);
         return `
-            <label class="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-indigo-500 transition">
+            <label class="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-emerald-500 transition">
                 <div class="flex items-center space-x-2">
-                    <input type="checkbox" name="modalDevice" value="${d.mac}" ${isChecked ? 'checked' : ''} class="w-4 h-4 text-indigo-600 rounded">
+                    <input type="checkbox" name="modalDevice" value="${d.mac}" ${isChecked ? 'checked' : ''} class="w-4 h-4 text-emerald-600 rounded">
                     <span class="font-medium text-xs text-slate-800 dark:text-slate-100">${d.hostname}</span>
                     <span class="text-[11px] text-slate-400 font-mono">(${d.ip} / ${d.vendor})</span>
                 </div>
@@ -597,7 +778,7 @@ function renderModalAppCategories(selectedAppIDs = []) {
             const isChecked = selectedSet.has(app.id);
             return `
                 <label class="inline-flex items-center space-x-1.5 bg-white dark:bg-slate-800 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer text-xs">
-                    <input type="checkbox" name="modalApp" value="${app.id}" ${isChecked ? 'checked' : ''} onchange="updateSelectedCount()" class="w-3.5 h-3.5 text-indigo-600 rounded">
+                    <input type="checkbox" name="modalApp" value="${app.id}" ${isChecked ? 'checked' : ''} onchange="updateSelectedCount()" class="w-3.5 h-3.5 text-emerald-600 rounded">
                     <span>${app.name}</span>
                 </label>
             `;
@@ -609,7 +790,7 @@ function renderModalAppCategories(selectedAppIDs = []) {
                     <span class="font-bold text-xs text-slate-700 dark:text-slate-200 flex items-center space-x-1">
                         <span>${cat.class_zh}</span>
                     </span>
-                    <button type="button" onclick="toggleSelectAllCategory(${cat.class_id})" class="text-[11px] text-indigo-600 hover:underline">全选/反选</button>
+                    <button type="button" onclick="toggleSelectAllCategory(${cat.class_id})" class="text-[11px] text-emerald-600 hover:underline">全选/反选</button>
                 </div>
                 <div class="flex flex-wrap gap-1.5" data-cat-id="${cat.class_id}">
                     ${appsHTML}
@@ -635,14 +816,12 @@ function toggleSelectAllCategory(classID) {
     updateSelectedCount();
 }
 
-// 快速分配设备
 function quickAssignDevice(mac) {
     openMemberModal();
     const cb = document.querySelector(`input[name="modalDevice"][value="${mac}"]`);
     if (cb) cb.checked = true;
 }
 
-// 编辑成员
 function editMember(id) {
     const member = appState.members.find(m => m.id === id);
     if (member) {
@@ -650,7 +829,6 @@ function editMember(id) {
     }
 }
 
-// 保存成员表单
 async function saveMemberForm() {
     const id = document.getElementById('formMemberId').value || 'm_' + Date.now();
     const name = document.getElementById('formMemberName').value.trim();
@@ -704,7 +882,6 @@ async function saveMemberForm() {
     }
 }
 
-// 删除成员
 async function deleteCurrentMember() {
     const id = document.getElementById('formMemberId').value;
     if (!id || !confirm('确定要删除该受管成员吗？')) return;
@@ -720,7 +897,6 @@ async function deleteCurrentMember() {
     }
 }
 
-// 一键断网
 async function lockMember(id) {
     try {
         const res = await authFetch(`/api/members/${id}/lock`, { method: 'POST' });
@@ -734,7 +910,6 @@ async function lockMember(id) {
     }
 }
 
-// 恢复上网
 async function unlockMember(id) {
     try {
         const res = await authFetch(`/api/members/${id}/unlock`, { method: 'POST' });
@@ -752,7 +927,6 @@ function clearPinSetting() {
     document.getElementById('settingPinCode').value = '';
 }
 
-// 保存全局设置
 async function saveGlobalSettings() {
     const pinVal = document.getElementById('settingPinCode').value.trim();
     if (pinVal && (!/^\d{4}$/.test(pinVal))) {
