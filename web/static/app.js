@@ -467,6 +467,12 @@ function renderMembers() {
                                 ${statusBadge}
                             </div>
                             <p class="text-xs text-slate-400 mt-0.5">${m.device_macs ? m.device_macs.length : 0} devices · ${m.blocked_app_ids ? m.blocked_app_ids.length : 0} apps blocked</p>
+                            ${(m.schedule && m.schedule.enabled && m.schedule.time_ranges && m.schedule.time_ranges.length > 0) ? `
+                                <p class="text-[11px] text-amber-600 dark:text-amber-400 font-medium mt-1 flex items-center space-x-1">
+                                    <i data-lucide="clock" class="w-3 h-3"></i>
+                                    <span>禁网: ${m.schedule.time_ranges.map(tr => tr.start_time + '-' + tr.end_time).join(', ')}</span>
+                                </p>
+                            ` : ''}
                         </div>
                     </div>
                     <button onclick="editMember('${m.id}')" class="p-2 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-700 transition" title="${t('editRules')}">
@@ -792,11 +798,57 @@ async function applyBonusTime(minutes) {
     }
 }
 
+// 星期选择快捷操作
+function selectScheduleDays(preset) {
+    const checkboxes = document.querySelectorAll('input[name="scheduleDay"]');
+    checkboxes.forEach(cb => {
+        const val = parseInt(cb.value);
+        if (preset === 'all') {
+            cb.checked = true;
+        } else if (preset === 'workday') {
+            cb.checked = val >= 1 && val <= 5;
+        } else if (preset === 'weekend') {
+            cb.checked = val === 6 || val === 0;
+        }
+    });
+}
+
+// 动态添加时间段行
+function addTimeRangeRow(startTime = '21:30', endTime = '07:00') {
+    const container = document.getElementById('modalTimeRangeList');
+    if (!container) return;
+
+    const row = document.createElement('div');
+    row.className = 'time-range-row flex items-center space-x-2 bg-white dark:bg-slate-800 p-2 rounded-xl border border-slate-200 dark:border-slate-700';
+    row.innerHTML = `
+        <div class="flex items-center space-x-1.5 flex-1">
+            <span class="text-xs text-slate-400">禁网</span>
+            <input type="time" class="time-range-start px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono" value="${startTime}">
+            <span class="text-slate-400 text-xs">至</span>
+            <input type="time" class="time-range-end px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono" value="${endTime}">
+        </div>
+        <button type="button" onclick="removeTimeRangeRow(this)" class="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition" title="删除时间段">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+        </button>
+    `;
+    container.appendChild(row);
+    lucide.createIcons();
+}
+
+function removeTimeRangeRow(btn) {
+    const row = btn.closest('.time-range-row');
+    if (row) {
+        row.remove();
+    }
+}
+
 // 成员编辑与创建 Modal 逻辑
 function openMemberModal(member = null) {
     const modal = document.getElementById('memberModal');
     const title = document.getElementById('modalTitle');
     const btnDel = document.getElementById('btnDeleteMember');
+    const timeRangeContainer = document.getElementById('modalTimeRangeList');
+    if (timeRangeContainer) timeRangeContainer.innerHTML = '';
 
     if (member) {
         title.innerText = '编辑成员规则 - ' + member.name;
@@ -804,10 +856,26 @@ function openMemberModal(member = null) {
         document.getElementById('formMemberName').value = member.name;
         document.getElementById('formMemberAvatar').value = member.avatar || 'boy';
         document.getElementById('formQuotaMinutes').value = member.quota_minutes || '';
-        if (member.schedule && member.schedule.time_ranges && member.schedule.time_ranges.length > 0) {
-            document.getElementById('formStartTime').value = member.schedule.time_ranges[0].start_time;
-            document.getElementById('formEndTime').value = member.schedule.time_ranges[0].end_time;
+
+        // 回显时间表
+        const schedule = member.schedule || { enabled: true, days: [0, 1, 2, 3, 4, 5, 6], time_ranges: [] };
+        document.getElementById('formScheduleEnable').checked = schedule.enabled !== false;
+
+        // 回显星期
+        const daysSet = new Set(schedule.days || [0, 1, 2, 3, 4, 5, 6]);
+        document.querySelectorAll('input[name="scheduleDay"]').forEach(cb => {
+            cb.checked = daysSet.has(parseInt(cb.value));
+        });
+
+        // 回显多个时间段
+        if (schedule.time_ranges && schedule.time_ranges.length > 0) {
+            schedule.time_ranges.forEach(tr => {
+                addTimeRangeRow(tr.start_time || '21:30', tr.end_time || '07:00');
+            });
+        } else {
+            addTimeRangeRow('21:30', '07:00');
         }
+
         btnDel.classList.remove('hidden');
     } else {
         title.innerText = '添加受管家庭成员';
@@ -815,8 +883,11 @@ function openMemberModal(member = null) {
         document.getElementById('formMemberName').value = '';
         document.getElementById('formMemberAvatar').value = 'boy';
         document.getElementById('formQuotaMinutes').value = '120';
-        document.getElementById('formStartTime').value = '21:30';
-        document.getElementById('formEndTime').value = '07:00';
+        document.getElementById('formScheduleEnable').checked = true;
+
+        selectScheduleDays('all');
+        addTimeRangeRow('21:30', '07:00');
+
         btnDel.classList.add('hidden');
     }
 
@@ -1034,8 +1105,18 @@ async function saveMemberForm() {
 
     const avatar = document.getElementById('formMemberAvatar').value;
     const quota = parseInt(document.getElementById('formQuotaMinutes').value) || 0;
-    const startTime = document.getElementById('formStartTime').value;
-    const endTime = document.getElementById('formEndTime').value;
+    
+    const scheduleEnabled = document.getElementById('formScheduleEnable').checked;
+    const scheduleDays = Array.from(document.querySelectorAll('input[name="scheduleDay"]:checked')).map(cb => parseInt(cb.value));
+
+    const timeRanges = [];
+    document.querySelectorAll('.time-range-row').forEach(row => {
+        const start = row.querySelector('.time-range-start')?.value || '';
+        const end = row.querySelector('.time-range-end')?.value || '';
+        if (start && end) {
+            timeRanges.push({ start_time: start, end_time: end });
+        }
+    });
 
     const deviceMACs = Array.from(document.querySelectorAll('input[name="modalDevice"]:checked')).map(cb => cb.value);
     const blockedAppIDs = Array.from(document.querySelectorAll('input[name="modalApp"]:checked')).map(cb => parseInt(cb.value));
@@ -1048,9 +1129,9 @@ async function saveMemberForm() {
         enabled: true,
         quota_minutes: quota,
         schedule: {
-            enabled: startTime !== '' && endTime !== '',
-            days: [0, 1, 2, 3, 4, 5, 6],
-            time_ranges: [{ start_time: startTime, end_time: endTime }],
+            enabled: scheduleEnabled,
+            days: scheduleDays.length > 0 ? scheduleDays : [0, 1, 2, 3, 4, 5, 6],
+            time_ranges: timeRanges,
             action: 'block'
         },
         blocked_app_ids: blockedAppIDs,
