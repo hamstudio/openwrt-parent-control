@@ -1,4 +1,4 @@
-/* 自定义增强样式 - 健康守护绿主题 */
+/* 自定义增强样式 */
 @layer utilities {
     /* 滚动条美化 */
     ::-webkit-scrollbar {
@@ -9,11 +9,11 @@
         background: transparent;
     }
     ::-webkit-scrollbar-thumb {
-        background: rgba(16, 185, 129, 0.25);
+        background: rgba(156, 163, 175, 0.3);
         border-radius: 9999px;
     }
     ::-webkit-scrollbar-thumb:hover {
-        background: rgba(16, 185, 129, 0.5);
+        background: rgba(156, 163, 175, 0.6);
     }
 }
 
@@ -27,16 +27,29 @@
     transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.guardian-glow {
-    box-shadow: 0 0 15px -3px rgba(16, 185, 129, 0.3);
+/* Toast 提示动画 */
+.toast-enter {
+    transform: translateY(-20px) scale(0.95);
+    opacity: 0;
+}
+.toast-active {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.toast-exit {
+    transform: translateY(-20px) scale(0.95);
+    opacity: 0;
+    transition: all 0.25s ease-in;
 }
 
-/* 标签动画 */
-.badge-pulse {
-    animation: badgePulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+/* 状态微光边框效果 */
+.border-locked {
+    border-color: rgba(239, 68, 68, 0.4) !important;
+    box-shadow: 0 0 15px -3px rgba(239, 68, 68, 0.15);
 }
 
-@keyframes badgePulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: .6; }
+.border-bonus {
+    border-color: rgba(245, 158, 11, 0.4) !important;
+    box-shadow: 0 0 15px -3px rgba(245, 158, 11, 0.15);
 }

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>健康守护中心 - ParentControl Guard</title>
+    <title>家长控制中心 - ParentControl Guard</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -13,16 +13,11 @@
                 extend: {
                     colors: {
                         brand: {
-                            50: '#ecfdf5',
-                            100: '#d1fae5',
-                            200: '#a7f3d0',
-                            300: '#6ee7b7',
-                            400: '#34d399',
-                            500: '#10b981',
-                            600: '#059669',
-                            700: '#047857',
-                            800: '#065f46',
-                            900: '#064e3b',
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
                         }
                     }
                 }
@@ -35,16 +30,22 @@
 </head>
 <body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 min-h-screen flex flex-col font-sans transition-colors duration-200">
 
+    <!-- 顶部全局 Toast 容器 -->
+    <div id="toastContainer" class="fixed top-4 right-4 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
     <!-- 顶部导航栏 -->
-    <header class="bg-white/85 dark:bg-slate-800/85 backdrop-blur-md sticky top-0 z-30 border-b border-emerald-100 dark:border-slate-700/80 shadow-sm">
+    <header class="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md sticky top-0 z-30 border-b border-slate-200 dark:border-slate-700">
         <div class="max-w-6xl mx-auto px-4 py-3.5 flex items-center justify-between">
             <div class="flex items-center space-x-3">
-                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-600 flex items-center justify-center text-white shadow-md shadow-emerald-500/25">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
                     <i data-lucide="shield-check" class="w-6 h-6"></i>
                 </div>
                 <div>
-                    <h1 class="text-lg font-bold bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 bg-clip-text text-transparent">ParentControl 绿色健康守护</h1>
-                    <p class="text-xs text-slate-400">细粒度网络与应用安全管控系统</p>
+                    <div class="flex items-center space-x-2">
+                        <h1 class="text-lg font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">ParentControl Guard</h1>
+                        <span id="latencyBadge" class="text-[10px] px-1.5 py-0.5 rounded-md font-mono bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400">直连 0ms</span>
+                    </div>
+                    <p class="text-xs text-slate-400">细粒度网络与应用管控系统</p>
                 </div>
             </div>
 
@@ -55,7 +56,7 @@
                     <i data-lucide="sun" class="w-5 h-5 hidden dark:block text-amber-400"></i>
                 </button>
                 <div class="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
-                <div id="kernelStatusBadge" class="hidden md:flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                <div id="kernelStatusBadge" class="hidden md:flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
                     <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                     <span>kmod-oaf DPI 引擎运行中</span>
                 </div>
@@ -68,67 +69,57 @@
 
         <!-- 顶部概览指标 -->
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-emerald-100/70 dark:border-slate-700/80 shadow-sm hover:border-emerald-300 transition">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-sm hover:border-indigo-500/30 transition">
                 <div class="flex items-center justify-between text-slate-400 text-xs font-medium mb-2">
                     <span>受管成员</span>
-                    <i data-lucide="users" class="w-4 h-4 text-emerald-500"></i>
+                    <i data-lucide="users" class="w-4 h-4 text-indigo-500"></i>
                 </div>
                 <div class="text-2xl font-extrabold text-slate-800 dark:text-white" id="statMembers">0</div>
-                <div class="text-xs text-slate-400 mt-1">位家庭成员管控中</div>
+                <div class="text-xs text-slate-400 mt-1">位家庭成员</div>
             </div>
 
-            <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-emerald-100/70 dark:border-slate-700/80 shadow-sm hover:border-emerald-300 transition">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-sm hover:border-emerald-500/30 transition">
                 <div class="flex items-center justify-between text-slate-400 text-xs font-medium mb-2">
                     <span>在线受管设备</span>
-                    <i data-lucide="smartphone" class="w-4 h-4 text-teal-500"></i>
+                    <i data-lucide="smartphone" class="w-4 h-4 text-emerald-500"></i>
                 </div>
                 <div class="text-2xl font-extrabold text-slate-800 dark:text-white" id="statDevices">0 / 0</div>
-                <div class="text-xs text-slate-400 mt-1">台设备活跃连接</div>
+                <div class="text-xs text-slate-400 mt-1">台活跃中</div>
             </div>
 
-            <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-emerald-100/70 dark:border-slate-700/80 shadow-sm hover:border-emerald-300 transition">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-sm hover:border-amber-500/30 transition">
                 <div class="flex items-center justify-between text-slate-400 text-xs font-medium mb-2">
-                    <span>限制应用库</span>
-                    <i data-lucide="layers" class="w-4 h-4 text-emerald-600"></i>
+                    <span>DPI 特征库</span>
+                    <i data-lucide="layers" class="w-4 h-4 text-amber-500"></i>
                 </div>
                 <div class="text-2xl font-extrabold text-slate-800 dark:text-white" id="statApps">0</div>
-                <div class="text-xs text-slate-400 mt-1">款 App 深度识别封禁</div>
+                <div class="text-xs text-slate-400 mt-1">款 App 精准识别</div>
             </div>
 
-            <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-emerald-100/70 dark:border-slate-700/80 shadow-sm hover:border-emerald-300 transition">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-sm hover:border-purple-500/30 transition">
                 <div class="flex items-center justify-between text-slate-400 text-xs font-medium mb-2">
-                    <span>绿色防护状态</span>
-                    <i data-lucide="shield" class="w-4 h-4 text-emerald-500"></i>
+                    <span>防绕过保护</span>
+                    <i data-lucide="lock" class="w-4 h-4 text-purple-500"></i>
                 </div>
                 <div class="text-sm font-bold text-emerald-600 dark:text-emerald-400 mt-1 flex items-center space-x-1">
                     <i data-lucide="check-circle" class="w-4 h-4"></i>
-                    <span>SafeSearch 全面开启</span>
+                    <span>DNS/DoH 劫持生效</span>
                 </div>
-                <div class="text-xs text-slate-400 mt-1">阻断加密 DNS 逃逸</div>
+                <div class="text-xs text-slate-400 mt-1">SafeSearch 强制开启</div>
             </div>
         </div>
 
         <!-- 标签页导航 -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-2">
-            <div class="flex space-x-2 overflow-x-auto pb-1 sm:pb-0">
-                <button onclick="switchTab('members')" id="tabBtnMembers" class="px-4 py-2 text-sm font-semibold rounded-xl bg-emerald-600 text-white shadow-sm transition whitespace-nowrap">家庭成员管控</button>
-                <button onclick="switchTab('devices')" id="tabBtnDevices" class="px-4 py-2 text-sm font-semibold rounded-xl text-slate-600 dark:text-slate-300 hover:bg-emerald-50 dark:hover:bg-slate-800 transition whitespace-nowrap">局域网设备列表</button>
-                <button onclick="switchTab('apps')" id="tabBtnApps" class="px-4 py-2 text-sm font-semibold rounded-xl text-slate-600 dark:text-slate-300 hover:bg-emerald-50 dark:hover:bg-slate-800 transition whitespace-nowrap flex items-center space-x-1.5">
-                    <span>限制应用特征库</span>
-                    <span class="px-1.5 py-0.5 text-[10px] rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400 font-bold" id="tabAppCountBadge">0</span>
-                </button>
-                <button onclick="switchTab('settings')" id="tabBtnSettings" class="px-4 py-2 text-sm font-semibold rounded-xl text-slate-600 dark:text-slate-300 hover:bg-emerald-50 dark:hover:bg-slate-800 transition whitespace-nowrap">全局安全配置</button>
+        <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
+            <div class="flex space-x-2">
+                <button onclick="switchTab('members')" id="tabBtnMembers" class="px-4 py-2 text-sm font-semibold rounded-xl bg-indigo-600 text-white shadow-sm transition">家庭成员管控</button>
+                <button onclick="switchTab('devices')" id="tabBtnDevices" class="px-4 py-2 text-sm font-semibold rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition">局域网设备列表</button>
+                <button onclick="switchTab('settings')" id="tabBtnSettings" class="px-4 py-2 text-sm font-semibold rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition">全局安全配置</button>
             </div>
-            <div class="flex items-center space-x-2">
-                <button id="addMemberBtn" onclick="openMemberModal()" class="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-3.5 py-2 rounded-xl shadow-sm transition">
-                    <i data-lucide="user-plus" class="w-4 h-4"></i>
-                    <span>添加受管成员</span>
-                </button>
-                <button id="addAppBtn" onclick="openAppModal()" class="hidden items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-3.5 py-2 rounded-xl shadow-sm transition">
-                    <i data-lucide="plus-circle" class="w-4 h-4"></i>
-                    <span>新增受限应用</span>
-                </button>
-            </div>
+            <button id="addMemberBtn" onclick="openMemberModal()" class="flex items-center space-x-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-sm font-medium px-3.5 py-2 rounded-xl shadow-sm transition">
+                <i data-lucide="user-plus" class="w-4 h-4"></i>
+                <span class="hidden sm:inline">添加受管成员</span>
+            </button>
         </div>
 
         <!-- Tab 1: 家庭成员列表 -->
@@ -136,29 +127,35 @@
             <div id="membersContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <!-- 动态渲染成员卡片 -->
             </div>
-            <div id="emptyMembers" class="hidden text-center py-16 bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-emerald-200 dark:border-slate-700">
-                <div class="w-16 h-16 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-500 mx-auto flex items-center justify-center mb-3">
+            <div id="emptyMembers" class="hidden text-center py-16 bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700">
+                <div class="w-16 h-16 rounded-full bg-indigo-50 dark:bg-indigo-950/50 text-indigo-500 mx-auto flex items-center justify-center mb-3">
                     <i data-lucide="user-x" class="w-8 h-8"></i>
                 </div>
                 <h3 class="text-base font-semibold text-slate-700 dark:text-slate-200">暂无受管家庭成员</h3>
-                <p class="text-sm text-slate-400 mt-1">点击右上角“添加受管成员”按钮，绑定孩子的手机或电脑开始健康守护。</p>
+                <p class="text-sm text-slate-400 mt-1">点击右上角“添加受管成员”按钮，绑定孩子的手机或电脑开始管控。</p>
             </div>
         </div>
 
         <!-- Tab 2: 局域网设备发现 -->
         <div id="tabDevices" class="hidden bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
-            <div class="p-4 border-b border-slate-100 dark:border-slate-700/60 flex items-center justify-between">
+            <div class="p-4 border-b border-slate-100 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                     <h3 class="font-bold text-slate-800 dark:text-slate-100">局域网已发现设备</h3>
                     <p class="text-xs text-slate-400 mt-0.5">自动探测 DHCP 租约与 ARP 邻居表</p>
                 </div>
-                <button onclick="fetchDevices()" class="p-2 rounded-lg text-slate-500 hover:bg-emerald-50 dark:hover:bg-slate-700 transition" title="刷新设备">
-                    <i data-lucide="refresh-cw" class="w-4 h-4 text-emerald-600"></i>
-                </button>
+                <div class="flex items-center space-x-2">
+                    <div class="relative flex-1 sm:w-64">
+                        <input type="text" id="deviceSearchInput" oninput="filterDevicesTable()" placeholder="搜索主机名、IP、MAC..." class="w-full pl-8 pr-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5"></i>
+                    </div>
+                    <button onclick="fetchDevices(); showToast('设备列表已刷新', 'info')" class="p-2 rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition" title="刷新设备">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                    </button>
+                </div>
             </div>
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-sm text-slate-600 dark:text-slate-300">
-                    <thead class="bg-emerald-50/50 dark:bg-slate-900/50 text-xs font-semibold text-slate-400 uppercase border-b border-slate-100 dark:border-slate-700">
+                    <thead class="bg-slate-50 dark:bg-slate-900/50 text-xs font-semibold text-slate-400 uppercase border-b border-slate-100 dark:border-slate-700">
                         <tr>
                             <th class="px-4 py-3">设备名 / 主机</th>
                             <th class="px-4 py-3">IP 地址</th>
@@ -176,38 +173,7 @@
             </div>
         </div>
 
-        <!-- Tab 3: 限制应用库管理 (CRUD 后台) -->
-        <div id="tabApps" class="hidden space-y-4">
-            <!-- 搜索与筛选操作栏 -->
-            <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
-                <div class="flex items-center space-x-3 w-full md:w-auto">
-                    <div class="relative w-full md:w-64">
-                        <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
-                        <input type="text" id="appSearchInput" oninput="filterAppList()" placeholder="搜索应用名称或 ID..." class="w-full pl-9 pr-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                    </div>
-                    <select id="appCategoryFilter" onchange="filterAppList()" class="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                        <option value="all">全部分类</option>
-                    </select>
-                </div>
-                <div class="flex items-center space-x-2 w-full md:w-auto justify-end">
-                    <button onclick="openCategoryModal()" class="px-3.5 py-2 text-xs font-semibold rounded-xl border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition flex items-center space-x-1">
-                        <i data-lucide="folder-plus" class="w-3.5 h-3.5"></i>
-                        <span>新建应用分类</span>
-                    </button>
-                    <button onclick="openAppModal()" class="px-3.5 py-2 text-xs font-semibold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition flex items-center space-x-1">
-                        <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
-                        <span>添加受限应用</span>
-                    </button>
-                </div>
-            </div>
-
-            <!-- 应用分类卡片与列表展示 -->
-            <div id="appManagementContainer" class="space-y-4">
-                <!-- 动态渲染按分类组织的应用管理视图 -->
-            </div>
-        </div>
-
-        <!-- Tab 4: 全局配置 -->
+        <!-- Tab 3: 全局配置 -->
         <div id="tabSettings" class="hidden bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 shadow-sm space-y-6">
             <div>
                 <h3 class="text-base font-bold text-slate-800 dark:text-white">全局安全与防绕过设置</h3>
@@ -222,7 +188,7 @@
                     </div>
                     <label class="relative inline-flex items-center cursor-pointer">
                         <input type="checkbox" id="settingGlobalEnable" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-emerald-600"></div>
+                        <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-indigo-600"></div>
                     </label>
                 </div>
 
@@ -233,7 +199,7 @@
                     </div>
                     <label class="relative inline-flex items-center cursor-pointer">
                         <input type="checkbox" id="settingSafeSearch" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-emerald-600"></div>
+                        <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-indigo-600"></div>
                     </label>
                 </div>
 
@@ -244,7 +210,7 @@
                     </div>
                     <label class="relative inline-flex items-center cursor-pointer">
                         <input type="checkbox" id="settingBlockDoH" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-emerald-600"></div>
+                        <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-indigo-600"></div>
                     </label>
                 </div>
 
@@ -255,26 +221,51 @@
                     </div>
                     <label class="relative inline-flex items-center cursor-pointer">
                         <input type="checkbox" id="settingIsolateNew" class="sr-only peer">
-                        <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-emerald-600"></div>
+                        <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-indigo-600"></div>
                     </label>
                 </div>
             </div>
 
             <div class="pt-4 flex justify-end">
-                <button onclick="saveGlobalSettings()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-6 py-2.5 rounded-xl shadow-sm transition">
+                <button onclick="saveGlobalSettings()" class="bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-sm font-semibold px-6 py-2.5 rounded-xl shadow-sm transition">
                     保存并应用设置
                 </button>
             </div>
         </div>
     </main>
 
+    <!-- 快捷加时奖励弹窗 Modal -->
+    <div id="bonusModal" class="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 dark:border-slate-700 space-y-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <div class="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-600 flex items-center justify-center">
+                        <i data-lucide="zap" class="w-5 h-5"></i>
+                    </div>
+                    <h3 class="font-bold text-base text-slate-800 dark:text-slate-100">奖励上网时间</h3>
+                </div>
+                <button onclick="closeBonusModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <p class="text-xs text-slate-400">选择要临时奖励给 <span id="bonusMemberName" class="font-bold text-slate-700 dark:text-slate-200"></span> 的上网时长：</p>
+            <input type="hidden" id="bonusMemberId">
+            <div class="grid grid-cols-2 gap-2">
+                <button onclick="applyBonusTime(15)" class="py-2.5 rounded-xl bg-slate-100 hover:bg-amber-500 hover:text-white dark:bg-slate-700 text-xs font-semibold transition">+15 分钟</button>
+                <button onclick="applyBonusTime(30)" class="py-2.5 rounded-xl bg-amber-500 text-white text-xs font-semibold shadow-sm transition">+30 分钟 (推荐)</button>
+                <button onclick="applyBonusTime(60)" class="py-2.5 rounded-xl bg-slate-100 hover:bg-amber-500 hover:text-white dark:bg-slate-700 text-xs font-semibold transition">+1 小时</button>
+                <button onclick="applyBonusTime(120)" class="py-2.5 rounded-xl bg-slate-100 hover:bg-amber-500 hover:text-white dark:bg-slate-700 text-xs font-semibold transition">+2 小时</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 成员编辑/创建弹窗 Modal -->
     <div id="memberModal" class="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 hidden">
-        <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-emerald-100 dark:border-slate-700 overflow-hidden">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
             <!-- Modal Header -->
             <div class="p-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
                 <div class="flex items-center space-x-2">
-                    <div class="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 flex items-center justify-center">
                         <i data-lucide="user-cog" class="w-5 h-5"></i>
                     </div>
                     <h3 class="font-bold text-base text-slate-800 dark:text-slate-100" id="modalTitle">配置成员管控规则</h3>
@@ -292,11 +283,11 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">成员名称</label>
-                        <input type="text" id="formMemberName" placeholder="例如：小明、大宝" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <input type="text" id="formMemberName" placeholder="例如：小明、大宝" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">头像标识</label>
-                        <select id="formMemberAvatar" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <select id="formMemberAvatar" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
                             <option value="boy">👦 男孩</option>
                             <option value="girl">👧 女孩</option>
                             <option value="student">🧑‍🎓 学生</option>
@@ -313,116 +304,26 @@
                     </div>
                 </div>
 
-                <!-- 每日配额 -->
-                <div class="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-700/60">
-                    <h4 class="font-bold text-slate-800 dark:text-slate-200 flex items-center space-x-1.5">
-                        <i data-lucide="hourglass" class="w-4 h-4 text-emerald-600"></i>
-                        <span>每日可用时长配额</span>
-                    </h4>
-                    <div>
-                        <div class="flex items-center space-x-3">
-                            <input type="number" id="formQuotaMinutes" placeholder="0 表示不限制" class="w-40 px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500">
-                            <span class="text-xs text-slate-500">分钟 / 每天 (0 为不限制)</span>
-                        </div>
-                        <span class="text-[11px] text-slate-400 mt-1 block">达到当日活跃使用限额后自动切断外网连接</span>
-                    </div>
-                </div>
-
-                <!-- 细粒度自定义多时间段计划表 -->
+                <!-- 时间限制与配额 -->
                 <div class="space-y-4 pt-2 border-t border-slate-100 dark:border-slate-700/60">
-                    <div class="flex items-center justify-between">
-                        <h4 class="font-bold text-slate-800 dark:text-slate-200 flex items-center space-x-1.5">
-                            <i data-lucide="calendar-clock" class="w-4 h-4 text-emerald-600"></i>
-                            <span>上网时间段精细化管控 (支持多个时段)</span>
-                        </h4>
-                        <label class="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" id="formScheduleEnabled" class="sr-only peer" checked onchange="toggleScheduleForm()">
-                            <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-emerald-600"></div>
-                        </label>
-                    </div>
+                    <h4 class="font-bold text-slate-800 dark:text-slate-200 flex items-center space-x-1.5">
+                        <i data-lucide="clock" class="w-4 h-4 text-indigo-500"></i>
+                        <span>时间限制与每日配额</span>
+                    </h4>
 
-                    <div id="scheduleFormContent" class="space-y-4 bg-slate-50 dark:bg-slate-900/60 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700">
-                        <!-- 管控模式 -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-xs font-semibold text-slate-500 mb-1.5">管控模式</label>
-                            <div class="grid grid-cols-2 gap-2">
-                                <label class="flex items-center space-x-2 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 cursor-pointer hover:border-emerald-500">
-                                    <input type="radio" name="scheduleAction" value="block" checked class="text-emerald-600">
-                                    <div>
-                                        <div class="text-xs font-bold text-slate-800 dark:text-slate-100">🚫 禁网时段模式</div>
-                                        <div class="text-[10px] text-slate-400">在所列时段内切断外网</div>
-                                    </div>
-                                </label>
-                                <label class="flex items-center space-x-2 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 cursor-pointer hover:border-emerald-500">
-                                    <input type="radio" name="scheduleAction" value="allow" class="text-emerald-600">
-                                    <div>
-                                        <div class="text-xs font-bold text-slate-800 dark:text-slate-100">✅ 仅允许时段模式</div>
-                                        <div class="text-[10px] text-slate-400">仅在所列时段内允许外网</div>
-                                    </div>
-                                </label>
-                            </div>
+                            <label class="block text-xs text-slate-500 mb-1">每日可用时长配额 (分钟)</label>
+                            <input type="number" id="formQuotaMinutes" placeholder="0 表示不限制" class="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500">
+                            <span class="text-[11px] text-slate-400">达到限额后自动切断网络</span>
                         </div>
-
-                        <!-- 生效星期 -->
                         <div>
-                            <div class="flex items-center justify-between mb-1.5">
-                                <label class="text-xs font-semibold text-slate-500">生效星期</label>
-                                <div class="space-x-1">
-                                    <button type="button" onclick="setDaysPreset('all')" class="text-[11px] px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 hover:bg-emerald-100 text-slate-700 dark:text-slate-200">每天</button>
-                                    <button type="button" onclick="setDaysPreset('workday')" class="text-[11px] px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 hover:bg-emerald-100 text-slate-700 dark:text-slate-200">工作日</button>
-                                    <button type="button" onclick="setDaysPreset('weekend')" class="text-[11px] px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 hover:bg-emerald-100 text-slate-700 dark:text-slate-200">周末</button>
-                                </div>
+                            <label class="block text-xs text-slate-500 mb-1">禁网时间段计划</label>
+                            <div class="flex items-center space-x-2">
+                                <input type="time" id="formStartTime" value="21:30" class="px-2.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs">
+                                <span class="text-slate-400">至</span>
+                                <input type="time" id="formEndTime" value="07:00" class="px-2.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs">
                             </div>
-                            <div class="grid grid-cols-7 gap-1" id="scheduleDaysContainer">
-                                <label class="flex flex-col items-center p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 cursor-pointer text-center">
-                                    <input type="checkbox" name="scheduleDay" value="1" checked class="w-3.5 h-3.5 text-emerald-600 rounded">
-                                    <span class="text-[11px] mt-1">周一</span>
-                                </label>
-                                <label class="flex flex-col items-center p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 cursor-pointer text-center">
-                                    <input type="checkbox" name="scheduleDay" value="2" checked class="w-3.5 h-3.5 text-emerald-600 rounded">
-                                    <span class="text-[11px] mt-1">周二</span>
-                                </label>
-                                <label class="flex flex-col items-center p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 cursor-pointer text-center">
-                                    <input type="checkbox" name="scheduleDay" value="3" checked class="w-3.5 h-3.5 text-emerald-600 rounded">
-                                    <span class="text-[11px] mt-1">周三</span>
-                                </label>
-                                <label class="flex flex-col items-center p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 cursor-pointer text-center">
-                                    <input type="checkbox" name="scheduleDay" value="4" checked class="w-3.5 h-3.5 text-emerald-600 rounded">
-                                    <span class="text-[11px] mt-1">周四</span>
-                                </label>
-                                <label class="flex flex-col items-center p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 cursor-pointer text-center">
-                                    <input type="checkbox" name="scheduleDay" value="5" checked class="w-3.5 h-3.5 text-emerald-600 rounded">
-                                    <span class="text-[11px] mt-1">周五</span>
-                                </label>
-                                <label class="flex flex-col items-center p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 cursor-pointer text-center">
-                                    <input type="checkbox" name="scheduleDay" value="6" checked class="w-3.5 h-3.5 text-emerald-600 rounded">
-                                    <span class="text-[11px] mt-1">周六</span>
-                                </label>
-                                <label class="flex flex-col items-center p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 cursor-pointer text-center">
-                                    <input type="checkbox" name="scheduleDay" value="0" checked class="w-3.5 h-3.5 text-emerald-600 rounded">
-                                    <span class="text-[11px] mt-1">周日</span>
-                                </label>
-                            </div>
-                        </div>
-
-                        <!-- 自定义多个时间段列表 -->
-                        <div>
-                            <div class="flex items-center justify-between mb-1.5">
-                                <label class="text-xs font-semibold text-slate-500">时段区间列表 (支持多个)</label>
-                                <div class="space-x-1">
-                                    <button type="button" onclick="applyPresetSchedule('night')" class="text-[11px] px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 hover:opacity-80">🌙 晚间作息</button>
-                                    <button type="button" onclick="applyPresetSchedule('school')" class="text-[11px] px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 hover:opacity-80">📚 上课禁网</button>
-                                </div>
-                            </div>
-
-                            <div id="timeRangesList" class="space-y-2">
-                                <!-- 动态添加时间段行 -->
-                            </div>
-
-                            <button type="button" onclick="addTimeRangeRow()" class="mt-2 w-full py-2 rounded-xl border border-dashed border-emerald-300 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 text-xs font-semibold flex items-center justify-center space-x-1 transition">
-                                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-                                <span>+ 添加新时间段</span>
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -431,10 +332,10 @@
                 <div class="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-700/60">
                     <div class="flex items-center justify-between">
                         <h4 class="font-bold text-slate-800 dark:text-slate-200 flex items-center space-x-1.5">
-                            <i data-lucide="shield-alert" class="w-4 h-4 text-emerald-600"></i>
-                            <span>深度受限应用选择 (kmod-oaf DPI 精准识别)</span>
+                            <i data-lucide="shield-alert" class="w-4 h-4 text-red-500"></i>
+                            <span>深度应用封禁 (kmod-oaf DPI 精准识别)</span>
                         </h4>
-                        <span class="text-xs text-slate-400">已选封禁 <b id="selectedAppCount" class="text-emerald-600">0</b> 款 App</span>
+                        <span class="text-xs text-slate-400">已选封禁 <b id="selectedAppCount" class="text-indigo-500">0</b> 款 App</span>
                     </div>
 
                     <div id="modalAppCategories" class="space-y-2 max-h-56 overflow-y-auto p-2 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
@@ -445,108 +346,23 @@
 
             <!-- Modal Footer -->
             <div class="p-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 flex items-center justify-between">
-                <button type="button" id="btnDeleteMember" onclick="deleteCurrentMember()" class="hidden text-rose-600 hover:text-rose-700 text-sm font-semibold flex items-center space-x-1">
+                <button type="button" id="btnDeleteMember" onclick="deleteCurrentMember()" class="hidden text-red-600 hover:text-red-700 text-sm font-semibold flex items-center space-x-1">
                     <i data-lucide="trash-2" class="w-4 h-4"></i>
                     <span>删除该成员</span>
                 </button>
                 <div class="flex items-center space-x-2 ml-auto">
                     <button type="button" onclick="closeMemberModal()" class="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition">取消</button>
-                    <button type="button" onclick="saveMemberForm()" class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-sm transition">保存规则</button>
+                    <button type="button" onclick="saveMemberForm()" class="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-sm font-semibold shadow-sm transition">保存规则</button>
                 </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 应用新增/编辑弹窗 Modal -->
-    <div id="appModal" class="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 hidden">
-        <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full shadow-2xl border border-emerald-100 dark:border-slate-700 overflow-hidden">
-            <div class="p-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
-                <div class="flex items-center space-x-2">
-                    <div class="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center">
-                        <i data-lucide="grid" class="w-5 h-5"></i>
-                    </div>
-                    <h3 class="font-bold text-base text-slate-800 dark:text-slate-100" id="appModalTitle">新增受限应用</h3>
-                </div>
-                <button onclick="closeAppModal()" class="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg">
-                    <i data-lucide="x" class="w-5 h-5"></i>
-                </button>
-            </div>
-
-            <div class="p-6 space-y-4 text-sm">
-                <input type="hidden" id="formAppId">
-                <div>
-                    <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">应用名称 *</label>
-                    <input type="text" id="formAppName" placeholder="例如：蛋仔派对、Steam、小红书" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                </div>
-
-                <div>
-                    <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">所属分类 *</label>
-                    <select id="formAppCategory" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                        <!-- 动态渲染分类选项 -->
-                    </select>
-                </div>
-
-                <div>
-                    <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">应用描述 / 特征备注 (可选)</label>
-                    <input type="text" id="formAppDescription" placeholder="例如：热门休闲联机手游" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                </div>
-            </div>
-
-            <div class="p-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 flex items-center justify-end space-x-2">
-                <button type="button" onclick="closeAppModal()" class="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition">取消</button>
-                <button type="button" onclick="saveAppForm()" class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-sm transition">保存应用</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 分类创建弹窗 Modal -->
-    <div id="categoryModal" class="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 hidden">
-        <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-sm w-full shadow-2xl border border-emerald-100 dark:border-slate-700 overflow-hidden">
-            <div class="p-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
-                <div class="flex items-center space-x-2">
-                    <div class="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center">
-                        <i data-lucide="folder-plus" class="w-5 h-5"></i>
-                    </div>
-                    <h3 class="font-bold text-base text-slate-800 dark:text-slate-100">新建应用分类</h3>
-                </div>
-                <button onclick="closeCategoryModal()" class="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg">
-                    <i data-lucide="x" class="w-5 h-5"></i>
-                </button>
-            </div>
-
-            <div class="p-6 space-y-4 text-sm">
-                <div>
-                    <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">分类名称 *</label>
-                    <input type="text" id="formCategoryName" placeholder="例如：短视频、在线学习、云游戏" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">分类图标</label>
-                    <select id="formCategoryIcon" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                        <option value="gamepad-2">🎮 游戏</option>
-                        <option value="play-circle">🎬 视频/影视</option>
-                        <option value="message-square">💬 社交/聊天</option>
-                        <option value="music">🎵 音乐</option>
-                        <option value="shopping-bag">🛍️ 购物</option>
-                        <option value="download">📥 下载</option>
-                        <option value="briefcase">💼 工作/学习</option>
-                        <option value="grid">📦 其他通用</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="p-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 flex items-center justify-end space-x-2">
-                <button type="button" onclick="closeCategoryModal()" class="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition">取消</button>
-                <button type="button" onclick="saveCategoryForm()" class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-sm transition">创建分类</button>
             </div>
         </div>
     </div>
 
     <!-- 底部状态栏 -->
     <footer class="bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 py-3 text-center text-xs text-slate-400">
-        OpenWrt 绿色健康守护家长控制系统 · Powered by Go & kmod-oaf DPI Engine
+        OpenWrt 细粒度家长控制系统 · Powered by Go & kmod-oaf DPI Engine
     </footer>
 
     <script src="/static/app.js"></script>
 </body>
 </html>
-
