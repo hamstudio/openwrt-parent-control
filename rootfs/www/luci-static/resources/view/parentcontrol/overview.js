@@ -1,46 +1,90 @@
 'use strict';
 'require view';
 'require dom';
+'require poll';
+'require rpc';
 'require fs';
 'require ui';
 
-return view.extend({
-	render: function() {
-		var host = window.location.hostname;
-		var dashboardUrl = window.location.protocol + '//' + host + ':8088';
+var callServiceList = rpc.declare({
+	object: 'service',
+	method: 'list',
+	params: [ 'name' ],
+	expect: { 'parentcontrol': {} }
+});
 
-		var body = E('div', { 'class': 'cbi-map' }, [
-			E('div', { 'style': 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;' }, [
-				E('div', {}, [
-					E('h2', { 'style': 'margin-bottom: 4px;' }, _('家长控制中心 (ParentControl Guard)')),
-					E('div', { 'class': 'cbi-map-descr', 'style': 'margin-bottom: 0;' }, _('基于 kmod-oaf 深度包检测 (DPI) 与细粒度时间配额引擎'))
-				]),
-				E('div', {}, [
-					E('a', {
-						'class': 'btn cbi-button cbi-button-apply',
-						'href': dashboardUrl,
-						'target': '_blank',
-						'style': 'background-color: #059669; color: white; padding: 6px 14px; border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; font-weight: bold; box-shadow: 0 2px 4px rgba(5, 150, 105, 0.2);'
-					}, [
-						_('↗ 新窗口全屏打开控制台')
+return view.extend({
+	load: function() {
+		return Promise.all([
+			callServiceList('parentcontrol').catch(function() { return {}; }),
+			fs.read_direct('/etc/parentcontrol/config.json', 'json').catch(function() { return null; })
+		]);
+	},
+
+	render: function(data) {
+		var serviceInfo = data[0] || {};
+		var configData = data[1] || {};
+		var isRunning = false;
+
+		if (serviceInfo && serviceInfo.instances) {
+			for (var instance in serviceInfo.instances) {
+				if (serviceInfo.instances[instance].running) {
+					isRunning = true;
+					break;
+				}
+			}
+		}
+
+		var host = window.location.hostname;
+		var port = (configData && configData.settings && configData.settings.web_port) ? configData.settings.web_port : 8088;
+		var dashboardUrl = window.location.protocol + '//' + host + ':' + port;
+
+		var statusBadge = isRunning 
+			? E('span', { 'class': 'badge', 'style': 'background:#10b981; color:#fff; padding:3px 8px; border-radius:4px; font-weight:bold;' }, _('运行中 (Running)'))
+			: E('span', { 'class': 'badge', 'style': 'background:#ef4444; color:#fff; padding:3px 8px; border-radius:4px; font-weight:bold;' }, _('未运行 (Stopped)'));
+
+		var viewRoot = E('div', { 'class': 'cbi-map' }, [
+			E('h2', { 'style': 'margin-bottom:4px;' }, _('家长控制与应用安全管控系统 (ParentControl Guard)')),
+			E('div', { 'class': 'cbi-map-descr', 'style': 'margin-bottom:16px;' }, _('基于 kmod-oaf 七层深度包检测 (DPI)、时间配额调度与 Cloudflare Worker 公网同步。')),
+
+			// 状态与快捷操作卡片
+			E('div', { 'class': 'cbi-section' }, [
+				E('div', { 'class': 'cbi-section-node' }, [
+					E('div', { 'class': 'cbi-value' }, [
+						E('label', { 'class': 'cbi-value-title' }, _('服务运行状态')),
+						E('div', { 'class': 'cbi-value-field', 'id': 'pc-status-field' }, [ statusBadge ])
+					]),
+					E('div', { 'class': 'cbi-value' }, [
+						E('label', { 'class': 'cbi-value-title' }, _('控制台地址')),
+						E('div', { 'class': 'cbi-value-field' }, [
+							E('a', {
+								'class': 'btn cbi-button cbi-button-apply',
+								'href': dashboardUrl,
+								'target': '_blank',
+								'style': 'background:#059669; color:#fff; padding:6px 14px; border-radius:6px; text-decoration:none; font-weight:bold; display:inline-block;'
+							}, [ _('↗ 新窗口全屏打开控制台 (端口: %s)').format(port) ]),
+							E('div', { 'class': 'cbi-value-description' }, _('支持移动端与桌面端自适应、4位数密码访问控制、加时奖励与数百款应用特征一键阻断。'))
+						])
 					])
 				])
 			]),
 
-			// 内嵌完整控制台视图 (无缝在 LuCI 内部操作)
-			E('div', {
-				'class': 'cbi-section',
-				'style': 'border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); border: 1px solid #e2e8f0; margin-top: 10px; background: #fff;'
-			}, [
-				E('iframe', {
-					'src': dashboardUrl,
-					'style': 'width: 100%; height: 780px; border: none; display: block;',
-					'id': 'parentcontrol-iframe'
-				})
+			// 内嵌控制台
+			E('div', { 'class': 'cbi-section', 'style': 'margin-top:16px;' }, [
+				E('h3', {}, _('内嵌控制面板')),
+				E('div', {
+					'style': 'width:100%; border:1px solid #cbd5e1; border-radius:8px; overflow:hidden; background:#fff; box-shadow:0 2px 4px rgba(0,0,0,0.05);'
+				}, [
+					E('iframe', {
+						'src': dashboardUrl,
+						'style': 'width:100%; height:820px; border:none; display:block;',
+						'id': 'pc-dashboard-iframe'
+					})
+				])
 			])
 		]);
 
-		return body;
+		return viewRoot;
 	},
 
 	handleSaveApply: null,

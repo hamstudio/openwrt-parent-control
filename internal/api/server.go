@@ -93,9 +93,21 @@ func (s *Server) Start(port int) error {
 		})
 	}
 
+	// 全局中间件：支持 iframe 嵌入与跨域调试
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Pin-Code, X-Router-Secret")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		mux.ServeHTTP(w, r)
+	})
+
 	addr := fmt.Sprintf("0.0.0.0:%d", port)
 	log.Printf("[API] ParentControl Web dashboard and API listening on http://%s", addr)
-	return http.ListenAndServe(addr, mux)
+	return http.ListenAndServe(addr, handler)
 }
 
 func (s *Server) jsonResponse(w http.ResponseWriter, status int, data interface{}) {

@@ -5,13 +5,14 @@
 			"ubus": {
 				"service": [ "list" ]
 			},
-			"uci": [ "parentcontrol" ],
 			"file": {
 				"/etc/parentcontrol/config.json": [ "read" ]
 			}
 		},
 		"write": {
-			"uci": [ "parentcontrol" ]
+			"file": {
+				"/etc/parentcontrol/config.json": [ "write" ]
+			}
 		}
 	}
 }
