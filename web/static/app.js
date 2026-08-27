@@ -174,9 +174,60 @@ function showToast(message, type = 'success') {
     }, 2800);
 }
 
+// 国际化联动
+function initI18n() {
+    currentLocale = getLocale();
+    const select = document.getElementById('langSelect');
+    if (select) {
+        select.value = currentLocale;
+    }
+    applyI18n();
+}
+
+function changeLanguage(lang) {
+    setLocale(lang);
+}
+
+function applyI18n() {
+    // 1. 更新所有 data-i18n 属性的静态 DOM 节点
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (key) {
+            el.innerText = t(key);
+        }
+    });
+
+    // 2. 更新所有 data-i18n-placeholder 属性的输入框
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        if (key) {
+            el.setAttribute('placeholder', t(key));
+        }
+    });
+
+    // 3. 更新 Tab 按钮文案
+    const btnMembers = document.getElementById('tabBtnMembers');
+    if (btnMembers) btnMembers.innerText = t('tabMembers');
+
+    const btnDevices = document.getElementById('tabBtnDevices');
+    if (btnDevices) btnDevices.innerText = t('tabDevices');
+
+    const btnSettings = document.getElementById('tabBtnSettings');
+    if (btnSettings) btnSettings.innerText = t('tabSettings');
+
+    // 4. 重新渲染动态列表
+    renderMembers();
+    renderDevices();
+    if (!document.getElementById('tabApps').classList.contains('hidden')) {
+        renderAppManagement();
+    }
+    lucide.createIcons();
+}
+
 // 初始化
 document.addEventListener('DOMContentLoaded', async () => {
     initTheme();
+    initI18n();
     lucide.createIcons();
     await fetchStatus();
 
@@ -385,13 +436,13 @@ function renderMembers() {
             cardBorderClass = 'border-bonus';
         }
 
-        let statusBadge = '<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400">正常上网</span>';
+        let statusBadge = `<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400">${t('normalOnline')}</span>`;
         if (m.is_locked) {
-            statusBadge = '<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-400 flex items-center space-x-1"><i data-lucide="lock" class="w-3 h-3"></i><span>已一键断网</span></span>';
+            statusBadge = `<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-400 flex items-center space-x-1"><i data-lucide="lock" class="w-3 h-3"></i><span>${t('locked')}</span></span>`;
         } else if (isBonus) {
-            statusBadge = '<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400 flex items-center space-x-1"><i data-lucide="zap" class="w-3 h-3"></i><span>奖励加时中</span></span>';
+            statusBadge = `<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400 flex items-center space-x-1"><i data-lucide="zap" class="w-3 h-3"></i><span>${t('bonusActive')}</span></span>`;
         } else if (isQuotaExceeded) {
-            statusBadge = '<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700 dark:bg-orange-950/60 dark:text-orange-400">配额已耗尽</span>';
+            statusBadge = `<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700 dark:bg-orange-950/60 dark:text-orange-400">${t('quotaExceeded')}</span>`;
         }
 
         const avatarMap = { boy: '👦', girl: '👧', student: '🧑‍🎓', child: '👶' };
@@ -409,18 +460,18 @@ function renderMembers() {
                                 <h3 class="font-bold text-base text-slate-800 dark:text-white">${m.name}</h3>
                                 ${statusBadge}
                             </div>
-                            <p class="text-xs text-slate-400 mt-0.5">绑定 ${m.device_macs ? m.device_macs.length : 0} 台设备 · 封禁 ${m.blocked_app_ids ? m.blocked_app_ids.length : 0} 款 App</p>
+                            <p class="text-xs text-slate-400 mt-0.5">${m.device_macs ? m.device_macs.length : 0} devices · ${m.blocked_app_ids ? m.blocked_app_ids.length : 0} apps blocked</p>
                         </div>
                     </div>
-                    <button onclick="editMember('${m.id}')" class="p-2 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-700 transition" title="编辑规则">
+                    <button onclick="editMember('${m.id}')" class="p-2 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-700 transition" title="${t('editRules')}">
                         <i data-lucide="sliders" class="w-4 h-4"></i>
                     </button>
                 </div>
 
                 <div class="space-y-1.5 bg-slate-50 dark:bg-slate-900/40 p-3 rounded-xl border border-slate-100 dark:border-slate-700/50">
                     <div class="flex justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
-                        <span>今日已用活跃时长</span>
-                        <span><b>${used}</b> / ${quota > 0 ? quota + ' 分钟' : '不限时'}</span>
+                        <span>${t('todayUsed')}</span>
+                        <span><b>${used}</b> / ${quota > 0 ? quota + ' min' : t('unlimited')}</span>
                     </div>
                     <div class="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
                         <div class="h-full rounded-full transition-width ${percent > 90 ? 'bg-red-500' : percent > 70 ? 'bg-amber-500' : 'bg-emerald-600'}" style="width: ${percent}%"></div>
@@ -431,17 +482,17 @@ function renderMembers() {
                     ${m.is_locked ? `
                         <button onclick="unlockMember('${m.id}')" class="flex items-center justify-center space-x-1.5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white text-xs font-semibold shadow-sm transition">
                             <i data-lucide="unlock" class="w-3.5 h-3.5"></i>
-                            <span>恢复上网</span>
+                            <span>${t('btnUnlock')}</span>
                         </button>
                     ` : `
                         <button onclick="lockMember('${m.id}')" class="flex items-center justify-center space-x-1.5 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 active:scale-95 text-white text-xs font-semibold shadow-sm transition">
                             <i data-lucide="lock" class="w-3.5 h-3.5"></i>
-                            <span>一键断网</span>
+                            <span>${t('btnLock')}</span>
                         </button>
                     `}
                     <button onclick="openBonusModal('${m.id}', '${m.name}')" class="flex items-center justify-center space-x-1.5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white text-xs font-semibold shadow-sm transition">
                         <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
-                        <span>奖励加时</span>
+                        <span>${t('btnBonus')}</span>
                     </button>
                 </div>
             </div>
@@ -472,7 +523,7 @@ function renderDevices(filterKeyword = '') {
     }
 
     tbody.innerHTML = filtered.map(d => {
-        let memberName = '<span class="text-slate-400 text-xs">未分配</span>';
+        let memberName = `<span class="text-slate-400 text-xs">${t('unassigned')}</span>`;
         const member = appState.members.find(m => m.device_macs && m.device_macs.includes(d.mac));
         if (member) {
             memberName = `<span class="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 font-medium text-xs">${member.name}</span>`;
@@ -490,11 +541,11 @@ function renderDevices(filterKeyword = '') {
                 </td>
                 <td class="px-4 py-3 font-mono text-xs">${d.ip || '-'}</td>
                 <td class="px-4 py-3 font-mono text-xs text-slate-500 dark:text-slate-400">${d.mac}</td>
-                <td class="px-4 py-3 text-xs">${d.vendor || '通用设备'}</td>
+                <td class="px-4 py-3 text-xs">${d.vendor || 'Generic'}</td>
                 <td class="px-4 py-3 text-xs font-mono text-emerald-600 dark:text-emerald-400 font-semibold">${d.online ? speedText : '-'}</td>
                 <td class="px-4 py-3">${memberName}</td>
                 <td class="px-4 py-3 text-right">
-                    <button onclick="quickAssignDevice('${d.mac}')" class="text-emerald-600 hover:text-emerald-700 text-xs font-semibold hover:underline">分配成员</button>
+                    <button onclick="quickAssignDevice('${d.mac}')" class="text-emerald-600 hover:text-emerald-700 text-xs font-semibold hover:underline">${t('btnAssign')}</button>
                 </td>
             </tr>
         `;
