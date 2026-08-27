@@ -144,6 +144,69 @@ struct MemberEditorView: View {
                             }
                         }
 
+                        // 快捷预设
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("快捷场景预设")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            HStack(spacing: 8) {
+                                Button {
+                                    scheduleAction = "block"
+                                    selectedDays = [0, 1, 2, 3, 4, 5, 6]
+                                    timeRanges = [
+                                        TimeRangeItem(
+                                            start: Calendar.current.date(from: DateComponents(hour: 21, minute: 30)) ?? Date(),
+                                            end: Calendar.current.date(from: DateComponents(hour: 7, minute: 0)) ?? Date()
+                                        )
+                                    ]
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Text("🌙")
+                                        Text("夜间防沉迷")
+                                            .font(.caption.bold())
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 7)
+                                    .background(Color.adaptiveGray5)
+                                    .foregroundColor(.primary)
+                                    .cornerRadius(8)
+                                }
+                                .buttonStyle(.plain)
+
+                                Button {
+                                    scheduleAction = "block"
+                                    selectedDays = [1, 2, 3, 4, 5]
+                                    timeRanges = [
+                                        TimeRangeItem(
+                                            start: Calendar.current.date(from: DateComponents(hour: 8, minute: 0)) ?? Date(),
+                                            end: Calendar.current.date(from: DateComponents(hour: 11, minute: 30)) ?? Date()
+                                        ),
+                                        TimeRangeItem(
+                                            start: Calendar.current.date(from: DateComponents(hour: 14, minute: 0)) ?? Date(),
+                                            end: Calendar.current.date(from: DateComponents(hour: 17, minute: 30)) ?? Date()
+                                        ),
+                                        TimeRangeItem(
+                                            start: Calendar.current.date(from: DateComponents(hour: 21, minute: 30)) ?? Date(),
+                                            end: Calendar.current.date(from: DateComponents(hour: 7, minute: 0)) ?? Date()
+                                        )
+                                    ]
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Text("🎒")
+                                        Text("上学日管控")
+                                            .font(.caption.bold())
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 7)
+                                    .background(Color.adaptiveGray5)
+                                    .foregroundColor(.primary)
+                                    .cornerRadius(8)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+
                         // 多时间段列表
                         VStack(alignment: .leading, spacing: 10) {
                             HStack {

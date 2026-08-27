@@ -107,7 +107,26 @@ func (s *Server) Start(port int) error {
 	})
 
 	addr := fmt.Sprintf("0.0.0.0:%d", port)
-	log.Printf("[API] ParentControl Web dashboard and API listening on http://%s", addr)
+	log.Printf("[API] ParentControl HTTP dashboard listening on http://%s", addr)
+
+	// 智能配置与启动 HTTPS 监听 (port + 1，如 8089)
+	tlsConfig, err := LoadOrCreateTLSConfig()
+	if err == nil && tlsConfig != nil {
+		httpsPort := port + 1
+		httpsAddr := fmt.Sprintf("0.0.0.0:%d", httpsPort)
+		httpsServer := &http.Server{
+			Addr:      httpsAddr,
+			Handler:   handler,
+			TLSConfig: tlsConfig,
+		}
+		log.Printf("[API] ParentControl HTTPS dashboard listening on https://%s", httpsAddr)
+		go func() {
+			if err := httpsServer.ListenAndServeTLS("", ""); err != nil {
+				log.Printf("[API] HTTPS server error: %v", err)
+			}
+		}()
+	}
+
 	return http.ListenAndServe(addr, handler)
 }
 

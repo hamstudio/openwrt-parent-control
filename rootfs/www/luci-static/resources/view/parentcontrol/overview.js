@@ -36,8 +36,11 @@ return view.extend({
 		}
 
 		var host = window.location.hostname;
-		var port = (configData && configData.settings && configData.settings.web_port) ? configData.settings.web_port : 8088;
-		var dashboardUrl = window.location.protocol + '//' + host + ':' + port;
+		var isHttps = (window.location.protocol === 'https:');
+		var basePort = (configData && configData.settings && configData.settings.web_port) ? configData.settings.web_port : 8088;
+		var port = isHttps ? (basePort + 1) : basePort;
+		var dashboardUrl = (isHttps ? 'https://' : 'http://') + host + ':' + port;
+		var httpUrl = 'http://' + host + ':' + basePort;
 
 		var statusBadge = isRunning 
 			? E('span', { 'class': 'badge', 'style': 'background:#10b981; color:#fff; padding:3px 8px; border-radius:4px; font-weight:bold;' }, _('运行中 (Running)'))
@@ -61,9 +64,15 @@ return view.extend({
 								'class': 'btn cbi-button cbi-button-apply',
 								'href': dashboardUrl,
 								'target': '_blank',
-								'style': 'background:#059669; color:#fff; padding:6px 14px; border-radius:6px; text-decoration:none; font-weight:bold; display:inline-block;'
-							}, [ _('↗ 新窗口全屏打开控制台 (端口: %s)').format(port) ]),
-							E('div', { 'class': 'cbi-value-description' }, _('支持移动端与桌面端自适应、4位数密码访问控制、加时奖励与数百款应用特征一键阻断。'))
+								'style': 'background:#059669; color:#fff; padding:6px 14px; border-radius:6px; text-decoration:none; font-weight:bold; display:inline-block; margin-right:8px;'
+							}, [ _('↗ 新窗口全屏打开控制台 (%s)').format(isHttps ? 'HTTPS :8089' : 'HTTP :8088') ]),
+							E('a', {
+								'class': 'btn cbi-button cbi-button-neutral',
+								'href': httpUrl,
+								'target': '_blank',
+								'style': 'padding:6px 12px; border-radius:6px; text-decoration:none; display:inline-block;'
+							}, [ _('HTTP 直连 (:8088)') ]),
+							E('div', { 'class': 'cbi-value-description', 'style': 'margin-top:6px;' }, _('已自动启用与系统一致的 SSL 证书加密。支持移动端与桌面端自适应、4位数密码访问控制。'))
 						])
 					])
 				])

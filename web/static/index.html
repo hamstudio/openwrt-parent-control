@@ -447,7 +447,7 @@
                             <span data-i18n="formMemberScheduleTitle">时间限制与禁网时间表</span>
                         </h4>
                         <label class="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" id="formScheduleEnable" class="sr-only peer" checked>
+                            <input type="checkbox" id="formScheduleEnable" onchange="toggleScheduleForm()" class="sr-only peer" checked>
                             <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-emerald-600"></div>
                             <span class="ml-2 text-xs font-semibold text-slate-600 dark:text-slate-300" data-i18n="formMemberScheduleEnable">启用时间表</span>
                         </label>
@@ -463,16 +463,29 @@
                     </div>
 
                     <div id="scheduleDetailsBlock" class="space-y-3 p-3.5 rounded-2xl bg-slate-50/70 dark:bg-slate-900/40 border border-slate-200/60 dark:border-slate-700/60">
+                        <!-- 管控模式切换 -->
+                        <div class="flex flex-wrap items-center gap-3 pb-2.5 border-b border-slate-200/60 dark:border-slate-700/60 text-xs">
+                            <span class="font-semibold text-slate-600 dark:text-slate-300" data-i18n="scheduleModeLabel">动作模式:</span>
+                            <label class="inline-flex items-center space-x-1.5 cursor-pointer">
+                                <input type="radio" name="scheduleAction" value="block" checked class="text-emerald-600 focus:ring-emerald-500">
+                                <span data-i18n="scheduleModeBlock">🚫 设为禁网时段 (命中时断网)</span>
+                            </label>
+                            <label class="inline-flex items-center space-x-1.5 cursor-pointer">
+                                <input type="radio" name="scheduleAction" value="allow" class="text-emerald-600 focus:ring-emerald-500">
+                                <span data-i18n="scheduleModeAllow">✅ 仅在时段内允许 (其余时间断网)</span>
+                            </label>
+                        </div>
+
                         <!-- 重复星期 -->
                         <div>
                             <div class="flex items-center justify-between mb-1.5">
                                 <label class="text-xs font-semibold text-slate-600 dark:text-slate-300" data-i18n="formDaysLabel">生效星期 (点击勾选)</label>
                                 <div class="flex items-center space-x-1.5 text-[11px]">
-                                    <button type="button" onclick="selectScheduleDays('all')" class="text-emerald-600 hover:underline" data-i18n="dayAll">每天</button>
+                                    <button type="button" onclick="selectScheduleDays('all')" class="text-emerald-600 hover:underline font-medium" data-i18n="dayAll">每天</button>
                                     <span class="text-slate-300">·</span>
-                                    <button type="button" onclick="selectScheduleDays('workday')" class="text-emerald-600 hover:underline" data-i18n="dayWorkday">工作日</button>
+                                    <button type="button" onclick="selectScheduleDays('workday')" class="text-emerald-600 hover:underline font-medium" data-i18n="dayWorkday">工作日</button>
                                     <span class="text-slate-300">·</span>
-                                    <button type="button" onclick="selectScheduleDays('weekend')" class="text-emerald-600 hover:underline" data-i18n="dayWeekend">周末</button>
+                                    <button type="button" onclick="selectScheduleDays('weekend')" class="text-emerald-600 hover:underline font-medium" data-i18n="dayWeekend">周末</button>
                                 </div>
                             </div>
                             <div class="grid grid-cols-7 gap-1.5 text-center">
@@ -507,10 +520,27 @@
                             </div>
                         </div>
 
+                        <!-- 快捷场景预设卡片 -->
+                        <div class="space-y-1.5 pt-1 border-t border-slate-200/50 dark:border-slate-700/50">
+                            <label class="text-xs font-semibold text-slate-600 dark:text-slate-300">快捷场景预设 (一键套用)</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button type="button" onclick="applyPresetSchedule('night')" class="flex items-center justify-center space-x-1.5 py-2 px-3 rounded-xl bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:text-emerald-700 dark:hover:text-emerald-300 hover:border-emerald-300 dark:hover:border-emerald-700 transition shadow-sm">
+                                    <span>🌙</span>
+                                    <span data-i18n="presetNight">夜间防沉迷</span>
+                                    <span class="text-[10px] text-slate-400 font-normal hidden sm:inline">(21:30~07:00)</span>
+                                </button>
+                                <button type="button" onclick="applyPresetSchedule('school')" class="flex items-center justify-center space-x-1.5 py-2 px-3 rounded-xl bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:text-emerald-700 dark:hover:text-emerald-300 hover:border-emerald-300 dark:hover:border-emerald-700 transition shadow-sm">
+                                    <span>🎒</span>
+                                    <span data-i18n="presetSchool">上学日管控</span>
+                                    <span class="text-[10px] text-slate-400 font-normal hidden sm:inline">(工作日3段)</span>
+                                </button>
+                            </div>
+                        </div>
+
                         <!-- 多个自定义时间段列表 -->
-                        <div class="pt-2">
+                        <div class="pt-2 border-t border-slate-200/50 dark:border-slate-700/50">
                             <div class="flex items-center justify-between mb-2">
-                                <label class="text-xs font-semibold text-slate-600 dark:text-slate-300" data-i18n="formTimeRangesLabel">自定义禁网时间段 (支持跨夜如 21:30 - 07:00)</label>
+                                <label class="text-xs font-semibold text-slate-600 dark:text-slate-300" data-i18n="formTimeRangesLabel">时间段设置 (支持多个时间段 & 跨夜)</label>
                                 <button type="button" onclick="addTimeRangeRow()" class="text-xs text-emerald-600 hover:text-emerald-700 font-semibold flex items-center space-x-1">
                                     <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
                                     <span data-i18n="btnAddTimeRange">+ 添加时间段</span>

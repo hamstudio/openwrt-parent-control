@@ -467,17 +467,41 @@ function renderMembers() {
                                 ${statusBadge}
                             </div>
                             <p class="text-xs text-slate-400 mt-0.5">${m.device_macs ? m.device_macs.length : 0} devices · ${m.blocked_app_ids ? m.blocked_app_ids.length : 0} apps blocked</p>
-                            ${(m.schedule && m.schedule.enabled && m.schedule.time_ranges && m.schedule.time_ranges.length > 0) ? `
-                                <p class="text-[11px] text-amber-600 dark:text-amber-400 font-medium mt-1 flex items-center space-x-1">
-                                    <i data-lucide="clock" class="w-3 h-3"></i>
-                                    <span>${t('blockSchedulePrefix')}: ${m.schedule.time_ranges.map(tr => tr.start_time + '-' + tr.end_time).join(', ')}</span>
-                                </p>
-                            ` : ''}
                         </div>
                     </div>
                     <button onclick="editMember('${m.id}')" class="p-2 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-700 transition" title="${t('editRules')}">
                         <i data-lucide="sliders" class="w-4 h-4"></i>
                     </button>
+                </div>
+
+                <!-- 时间段管控摘要 -->
+                <div class="text-xs bg-slate-50 dark:bg-slate-900/50 p-2.5 rounded-xl border border-slate-100 dark:border-slate-700/60 flex items-center space-x-1.5">
+                    <i data-lucide="clock" class="w-3.5 h-3.5 text-slate-400 flex-shrink-0"></i>
+                    <div class="truncate text-[11px]">${(() => {
+                        if (m.schedule && m.schedule.enabled && m.schedule.time_ranges && m.schedule.time_ranges.length > 0) {
+                            const isBlock = (m.schedule.action === 'block' || !m.schedule.action);
+                            const actionText = isBlock ? `🚫 ${t('blockSchedulePrefix')}` : `✅ ${t('allowSchedulePrefix')}`;
+                            const actionColor = isBlock ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400';
+                            const rangesText = m.schedule.time_ranges.map(tr => `${tr.start_time}~${tr.end_time}`).join(', ');
+                            let daysText = t('dayAll');
+                            if (m.schedule.days && m.schedule.days.length > 0 && m.schedule.days.length < 7) {
+                                const sortedDays = m.schedule.days.slice().sort((a, b) => a - b);
+                                const dayMap = {
+                                    0: t('wDaySun'), 1: t('wDayMon'), 2: t('wDayTue'),
+                                    3: t('wDayWed'), 4: t('wDayThu'), 5: t('wDayFri'), 6: t('wDaySat')
+                                };
+                                if (JSON.stringify(sortedDays) === JSON.stringify([1, 2, 3, 4, 5])) {
+                                    daysText = t('dayWorkday');
+                                } else if (JSON.stringify(sortedDays) === JSON.stringify([0, 6])) {
+                                    daysText = t('dayWeekend');
+                                } else {
+                                    daysText = sortedDays.map(d => dayMap[d]).join('');
+                                }
+                            }
+                            return `<span class="${actionColor} font-semibold">${actionText}: ${rangesText} (${daysText})</span>`;
+                        }
+                        return `<span class="text-slate-400 font-normal">${t('scheduleSummaryAllDay')}</span>`;
+                    })()}</div>
                 </div>
 
                 <div class="space-y-1.5 bg-slate-50 dark:bg-slate-900/40 p-3 rounded-xl border border-slate-100 dark:border-slate-700/50">
@@ -813,19 +837,41 @@ function selectScheduleDays(preset) {
     });
 }
 
+// 快捷预设（夜间防沉迷 / 上学日管控）
+function applyPresetSchedule(preset) {
+    const container = document.getElementById('modalTimeRangeList');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (preset === 'night') {
+        const blockRadio = document.querySelector('input[name="scheduleAction"][value="block"]');
+        if (blockRadio) blockRadio.checked = true;
+        selectScheduleDays('all');
+        addTimeRangeRow('21:30', '07:00');
+    } else if (preset === 'school') {
+        const blockRadio = document.querySelector('input[name="scheduleAction"][value="block"]');
+        if (blockRadio) blockRadio.checked = true;
+        selectScheduleDays('workday');
+        addTimeRangeRow('08:00', '11:30');
+        addTimeRangeRow('14:00', '17:30');
+        addTimeRangeRow('21:30', '07:00');
+    }
+}
+
 // 动态添加时间段行
 function addTimeRangeRow(startTime = '21:30', endTime = '07:00') {
     const container = document.getElementById('modalTimeRangeList');
     if (!container) return;
 
+    const currentCount = container.querySelectorAll('.time-range-row').length;
     const row = document.createElement('div');
     row.className = 'time-range-row flex items-center space-x-2 bg-white dark:bg-slate-800 p-2 rounded-xl border border-slate-200 dark:border-slate-700';
     row.innerHTML = `
         <div class="flex items-center space-x-1.5 flex-1">
-            <span class="text-xs text-slate-400">${t('timeRangeBlock')}</span>
-            <input type="time" class="time-range-start px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono" value="${startTime}">
+            <span class="text-xs font-mono font-bold text-slate-400 w-5 text-center slot-index">${currentCount + 1}</span>
+            <input type="time" class="time-range-start px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono text-slate-800 dark:text-slate-100" value="${startTime}">
             <span class="text-slate-400 text-xs">${t('timeRangeTo')}</span>
-            <input type="time" class="time-range-end px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono" value="${endTime}">
+            <input type="time" class="time-range-end px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono text-slate-800 dark:text-slate-100" value="${endTime}">
         </div>
         <button type="button" onclick="removeTimeRangeRow(this)" class="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition" title="Delete">
             <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
@@ -839,6 +885,11 @@ function removeTimeRangeRow(btn) {
     const row = btn.closest('.time-range-row');
     if (row) {
         row.remove();
+        // 重新编号
+        document.querySelectorAll('#modalTimeRangeList .time-range-row').forEach((r, idx) => {
+            const numEl = r.querySelector('.slot-index');
+            if (numEl) numEl.innerText = idx + 1;
+        });
     }
 }
 
@@ -858,8 +909,13 @@ function openMemberModal(member = null) {
         document.getElementById('formQuotaMinutes').value = member.quota_minutes || '';
 
         // 回显时间表
-        const schedule = member.schedule || { enabled: true, days: [0, 1, 2, 3, 4, 5, 6], time_ranges: [] };
+        const schedule = member.schedule || { enabled: true, days: [0, 1, 2, 3, 4, 5, 6], time_ranges: [], action: 'block' };
         document.getElementById('formScheduleEnable').checked = schedule.enabled !== false;
+
+        // 回显动作模式
+        const action = schedule.action || 'block';
+        const actionRadio = document.querySelector(`input[name="scheduleAction"][value="${action}"]`);
+        if (actionRadio) actionRadio.checked = true;
 
         // 回显星期
         const daysSet = new Set(schedule.days || [0, 1, 2, 3, 4, 5, 6]);
@@ -885,17 +941,32 @@ function openMemberModal(member = null) {
         document.getElementById('formQuotaMinutes').value = '120';
         document.getElementById('formScheduleEnable').checked = true;
 
+        const defaultActionRadio = document.querySelector('input[name="scheduleAction"][value="block"]');
+        if (defaultActionRadio) defaultActionRadio.checked = true;
+
         selectScheduleDays('all');
         addTimeRangeRow('21:30', '07:00');
 
         btnDel.classList.add('hidden');
     }
 
+    toggleScheduleForm();
     renderModalDevices(member ? member.device_macs : []);
     renderModalAppCategories(member ? member.blocked_app_ids : []);
 
     modal.classList.remove('hidden');
     lucide.createIcons();
+}
+
+function toggleScheduleForm() {
+    const isEnabled = document.getElementById('formScheduleEnable')?.checked;
+    const content = document.getElementById('scheduleDetailsBlock');
+    if (!content) return;
+    if (isEnabled) {
+        content.classList.remove('opacity-40', 'pointer-events-none');
+    } else {
+        content.classList.add('opacity-40', 'pointer-events-none');
+    }
 }
 
 function closeMemberModal() {
@@ -1107,6 +1178,7 @@ async function saveMemberForm() {
     const quota = parseInt(document.getElementById('formQuotaMinutes').value) || 0;
     
     const scheduleEnabled = document.getElementById('formScheduleEnable').checked;
+    const scheduleAction = document.querySelector('input[name="scheduleAction"]:checked')?.value || 'block';
     const scheduleDays = Array.from(document.querySelectorAll('input[name="scheduleDay"]:checked')).map(cb => parseInt(cb.value));
 
     const timeRanges = [];
@@ -1129,10 +1201,10 @@ async function saveMemberForm() {
         enabled: true,
         quota_minutes: quota,
         schedule: {
-            enabled: scheduleEnabled,
+            enabled: scheduleEnabled && timeRanges.length > 0,
             days: scheduleDays.length > 0 ? scheduleDays : [0, 1, 2, 3, 4, 5, 6],
             time_ranges: timeRanges,
-            action: 'block'
+            action: scheduleAction
         },
         blocked_app_ids: blockedAppIDs,
         safe_search: true,

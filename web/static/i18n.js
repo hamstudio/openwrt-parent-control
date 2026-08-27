@@ -173,9 +173,15 @@ const I18N_LOCALES = {
     "optChat": "💬 社交/聊天",
     "optMusic": "🎵 音乐",
     "optShopping": "🛍️ 购物",
-    "optDownload": "📥 下载",
-    "optWork": "💼 工作/学习",
-    "optOther": "📦 其他通用"
+    "optOther": "📦 其他通用",
+    "scheduleModeLabel": "动作模式:",
+    "scheduleModeBlock": "🚫 设为禁网时段 (命中时断网)",
+    "scheduleModeAllow": "✅ 仅在时段内允许 (其余时间断网)",
+    "presetNight": "夜间防沉迷",
+    "presetSchool": "上学日管控",
+    "allowSchedulePrefix": "仅允许",
+    "scheduleSummaryAllDay": "全天允许上网",
+    "slotNumber": "时段"
   },
   "en-US": {
     "name": "English",
@@ -352,7 +358,15 @@ const I18N_LOCALES = {
     "optShopping": "🛍️ Shopping",
     "optDownload": "📥 Download",
     "optWork": "💼 Work & Study",
-    "optOther": "📦 General / Other"
+    "optOther": "📦 General / Other",
+    "scheduleModeLabel": "Action Mode:",
+    "scheduleModeBlock": "🚫 Block Mode (Block in slots)",
+    "scheduleModeAllow": "✅ Allow Mode (Allow only in slots)",
+    "presetNight": "Night Sleep",
+    "presetSchool": "School Day",
+    "allowSchedulePrefix": "Allowed",
+    "scheduleSummaryAllDay": "Allowed all day",
+    "slotNumber": "Slot"
   },
   "zh-TW": {
     "name": "繁體中文",
@@ -529,7 +543,15 @@ const I18N_LOCALES = {
     "optShopping": "🛍️ 購物",
     "optDownload": "📥 下載",
     "optWork": "💼 工作/學習",
-    "optOther": "📦 其他通用"
+    "optOther": "📦 其他通用",
+    "scheduleModeLabel": "動作模式:",
+    "scheduleModeBlock": "🚫 設為禁網時段 (命中時斷網)",
+    "scheduleModeAllow": "✅ 僅在時段內允許 (其餘時間斷網)",
+    "presetNight": "夜間防沉迷",
+    "presetSchool": "上學日管控",
+    "allowSchedulePrefix": "僅允許",
+    "scheduleSummaryAllDay": "全天允許上網",
+    "slotNumber": "時段"
   },
   "ja-JP": {
     "name": "日本語",
@@ -706,7 +728,15 @@ const I18N_LOCALES = {
     "optShopping": "🛍️ ショッピング",
     "optDownload": "📥 ダウンロード",
     "optWork": "💼 仕事・学習",
-    "optOther": "📦 その他"
+    "optOther": "📦 その他",
+    "scheduleModeLabel": "動作モード:",
+    "scheduleModeBlock": "🚫 アクセス遮断 (指定時間内に遮断)",
+    "scheduleModeAllow": "✅ 許可時間のみ (他は遮断)",
+    "presetNight": "夜間睡眠",
+    "presetSchool": "学校日制限",
+    "allowSchedulePrefix": "許可",
+    "scheduleSummaryAllDay": "終日インターネット許可",
+    "slotNumber": "枠"
   },
   "ko-KR": {
     "name": "한국어",
@@ -883,7 +913,15 @@ const I18N_LOCALES = {
     "optShopping": "🛍️ 쇼핑",
     "optDownload": "📥 다운로드",
     "optWork": "💼 업무/학습",
-    "optOther": "📦 기타"
+    "optOther": "📦 기타",
+    "scheduleModeLabel": "작동 모드:",
+    "scheduleModeBlock": "🚫 인터넷 차단 (지정 시간대 차단)",
+    "scheduleModeAllow": "✅ 지정 시간대만 허용 (그 외 차단)",
+    "presetNight": "야간 취침",
+    "presetSchool": "등교일 관리",
+    "allowSchedulePrefix": "허용",
+    "scheduleSummaryAllDay": "종일 인터넷 허용",
+    "slotNumber": "구간"
   },
   "de-DE": {
     "name": "Deutsch",
@@ -1060,7 +1098,15 @@ const I18N_LOCALES = {
     "optShopping": "🛍️ Shopping",
     "optDownload": "📥 Download",
     "optWork": "💼 Arbeit & Lernen",
-    "optOther": "📦 Allgemein"
+    "optOther": "📦 Allgemein",
+    "scheduleModeLabel": "Aktionsmodus:",
+    "scheduleModeBlock": "🚫 Sperrzeit (In Zeitfenstern blockieren)",
+    "scheduleModeAllow": "✅ Nur erlaubte Zeiten (Sonst gesperrt)",
+    "presetNight": "Nachtruhe",
+    "presetSchool": "Schultag",
+    "allowSchedulePrefix": "Erlaubt",
+    "scheduleSummaryAllDay": "Ganztägig erlaubt",
+    "slotNumber": "Slot"
   },
   "fr-FR": {
     "name": "Français",
@@ -1237,7 +1283,15 @@ const I18N_LOCALES = {
     "optShopping": "🛍️ Achats",
     "optDownload": "📥 Téléchargement",
     "optWork": "💼 Travail & Études",
-    "optOther": "📦 Autre"
+    "optOther": "📦 Autre",
+    "scheduleModeLabel": "Mode d'action :",
+    "scheduleModeBlock": "🚫 Bloquer l'accès (Pendant les plages)",
+    "scheduleModeAllow": "✅ Autoriser uniquement (Bloqué le reste)",
+    "presetNight": "Nuit calme",
+    "presetSchool": "Jour d'école",
+    "allowSchedulePrefix": "Autorisé",
+    "scheduleSummaryAllDay": "Autorisé toute la journée",
+    "slotNumber": "Plage"
   },
   "es-ES": {
     "name": "Español",
@@ -1412,9 +1466,15 @@ const I18N_LOCALES = {
     "optChat": "💬 Chat y redes",
     "optMusic": "🎵 Música",
     "optShopping": "🛍️ Compras",
-    "optDownload": "📥 Descargas",
-    "optWork": "💼 Trabajo y estudio",
-    "optOther": "📦 General / Otro"
+    "optOther": "📦 General / Otro",
+    "scheduleModeLabel": "Modo de acción:",
+    "scheduleModeBlock": "🚫 Bloquear acceso (Durante los horarios)",
+    "scheduleModeAllow": "✅ Permitir solo en horario (Bloqueado el resto)",
+    "presetNight": "Modo noche",
+    "presetSchool": "Día escolar",
+    "allowSchedulePrefix": "Permitido",
+    "scheduleSummaryAllDay": "Permitido todo el día",
+    "slotNumber": "Tramo"
   }
 };
 
