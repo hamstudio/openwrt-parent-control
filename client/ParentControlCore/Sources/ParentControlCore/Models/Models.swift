@@ -252,6 +252,9 @@ public struct AppCategory: Codable, Identifiable, Hashable, Sendable {
 public struct GlobalSettings: Codable, Hashable, Sendable {
     public var enabled: Bool
     public var pinCode: String?
+    public var cloudSyncEnabled: Bool?
+    public var cloudWorkerUrl: String?
+    public var cloudDeviceSecret: String?
     public var enforceSafeSearch: Bool
     public var blockDoHDoT: Bool
     public var isolateNewDevices: Bool
@@ -259,6 +262,9 @@ public struct GlobalSettings: Codable, Hashable, Sendable {
     public enum CodingKeys: String, CodingKey {
         case enabled
         case pinCode = "pin_code"
+        case cloudSyncEnabled = "cloud_sync_enabled"
+        case cloudWorkerUrl = "cloud_worker_url"
+        case cloudDeviceSecret = "cloud_device_secret"
         case enforceSafeSearch = "enforce_safe_search"
         case blockDoHDoT = "block_doh_dot"
         case isolateNewDevices = "isolate_new_devices"
@@ -267,12 +273,18 @@ public struct GlobalSettings: Codable, Hashable, Sendable {
     public init(
         enabled: Bool = true,
         pinCode: String? = nil,
+        cloudSyncEnabled: Bool? = false,
+        cloudWorkerUrl: String? = nil,
+        cloudDeviceSecret: String? = nil,
         enforceSafeSearch: Bool = true,
         blockDoHDoT: Bool = true,
         isolateNewDevices: Bool = false
     ) {
         self.enabled = enabled
         self.pinCode = pinCode
+        self.cloudSyncEnabled = cloudSyncEnabled
+        self.cloudWorkerUrl = cloudWorkerUrl
+        self.cloudDeviceSecret = cloudDeviceSecret
         self.enforceSafeSearch = enforceSafeSearch
         self.blockDoHDoT = blockDoHDoT
         self.isolateNewDevices = isolateNewDevices

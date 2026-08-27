@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"syscall"
 
 	"parentcontrol/internal/api"
+	"parentcontrol/internal/cloud"
 	"parentcontrol/internal/config"
 	"parentcontrol/internal/device"
 	"parentcontrol/internal/dpi"
@@ -78,7 +80,11 @@ func main() {
 		os.Exit(0)
 	}()
 
-	// 8. 启动 Web 控制台与 API
+	// 8. 启动 Cloudflare Worker 云端同步器
+	syncer := cloud.NewSyncer(engine, devTracker, dpiMgr, cfgStore)
+	syncer.Start(context.Background())
+
+	// 9. 启动 Web 控制台与 API
 	webPort := cfgStore.Data.Settings.WebPort
 	if *port != 8088 {
 		webPort = *port

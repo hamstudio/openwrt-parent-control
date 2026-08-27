@@ -351,6 +351,9 @@ async function fetchSettings() {
         document.getElementById('settingBlockDoH').checked = appState.settings.block_doh_dot;
         document.getElementById('settingIsolateNew').checked = appState.settings.isolate_new_devices;
         document.getElementById('settingPinCode').value = appState.settings.pin_code || '';
+        document.getElementById('settingCloudSyncEnable').checked = appState.settings.cloud_sync_enabled || false;
+        document.getElementById('settingCloudWorkerURL').value = appState.settings.cloud_worker_url || '';
+        document.getElementById('settingCloudSecret').value = appState.settings.cloud_device_secret || '';
     } catch (e) {
         console.error('Fetch settings failed:', e);
     }
@@ -937,6 +940,9 @@ async function saveGlobalSettings() {
     const payload = {
         enabled: document.getElementById('settingGlobalEnable').checked,
         pin_code: pinVal,
+        cloud_sync_enabled: document.getElementById('settingCloudSyncEnable').checked,
+        cloud_worker_url: document.getElementById('settingCloudWorkerURL').value.trim(),
+        cloud_device_secret: document.getElementById('settingCloudSecret').value.trim(),
         enforce_safe_search: document.getElementById('settingSafeSearch').checked,
         block_doh_dot: document.getElementById('settingBlockDoH').checked,
         isolate_new_devices: document.getElementById('settingIsolateNew').checked,

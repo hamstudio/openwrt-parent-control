@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // Device 表示局域网内探测到的设备
 type Device struct {
@@ -75,15 +78,27 @@ type AppCategory struct {
 
 // GlobalSettings 全局配置
 type GlobalSettings struct {
-	Enabled           bool     `json:"enabled"`             // 主开关
-	WebPort           int      `json:"web_port"`            // 独立 Web 控制台端口 (默认 8088)
-	PinCode           string   `json:"pin_code"`            // 可选的 4 位数访问密码，为空表示不启用
-	EnforceSafeSearch bool     `json:"enforce_safe_search"` // 全局 SafeSearch
-	BlockDoHDoT       bool     `json:"block_doh_dot"`       // 阻断公共 DoH/DoT 防止绕过
-	IsolateNewDevices bool     `json:"isolate_new_devices"` // 新设备接入默认隔离（防 MAC 随机化）
-	CustomBlacklist   []string `json:"custom_blacklist"`    // 自定义黑名单域名
-	CustomWhitelist   []string `json:"custom_whitelist"`    // 自定义白名单域名
-	DailyResetHour    int      `json:"daily_reset_hour"`    // 每日配额重置时间（默认 0 点）
+	Enabled           bool     `json:"enabled"`              // 主开关
+	WebPort           int      `json:"web_port"`             // 独立 Web 控制台端口 (默认 8088)
+	PinCode           string   `json:"pin_code"`             // 可选的 4 位数访问密码，为空表示不启用
+	CloudSyncEnabled  bool     `json:"cloud_sync_enabled"`   // 是否启用 Cloudflare Worker 公网同步
+	CloudWorkerURL    string   `json:"cloud_worker_url"`     // Cloudflare Worker API 地址 (如 https://xxx.workers.dev)
+	CloudDeviceSecret string   `json:"cloud_device_secret"`  // 设备共享密钥 (可选)
+	EnforceSafeSearch bool     `json:"enforce_safe_search"`  // 全局 SafeSearch
+	BlockDoHDoT       bool     `json:"block_doh_dot"`        // 阻断公共 DoH/DoT 防止绕过
+	IsolateNewDevices bool     `json:"isolate_new_devices"`  // 新设备接入默认隔离（防 MAC 随机化）
+	CustomBlacklist   []string `json:"custom_blacklist"`     // 自定义黑名单域名
+	CustomWhitelist   []string `json:"custom_whitelist"`     // 自定义白名单域名
+	DailyResetHour    int      `json:"daily_reset_hour"`     // 每日配额重置时间（默认 0 点）
+}
+
+// CloudCommand 云端下发的指令
+type CloudCommand struct {
+	ID        string          `json:"id"`
+	Type      string          `json:"type"` // LOCK, UNLOCK, BONUS, SET_MEMBER, DELETE_MEMBER, UPDATE_SETTINGS, ADD_APP, DELETE_APP
+	MemberID  string          `json:"member_id,omitempty"`
+	Payload   json.RawMessage `json:"payload,omitempty"`
+	CreatedAt int64           `json:"created_at"`
 }
 
 // SystemStatus 系统运行状态
