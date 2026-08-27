@@ -11,6 +11,7 @@ bin/
 *.test
 .build/
 .wrangler/
+dist/
 
 # IDE and OS
 .DS_Store
