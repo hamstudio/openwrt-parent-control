@@ -836,3 +836,37 @@ function tDpiApp(name, id = '') {
   }
   return name;
 }
+
+function getLocale() {
+  const saved = localStorage.getItem('parentcontrol_lang');
+  if (saved && I18N_LOCALES[saved]) return saved;
+  const nav = navigator.language || 'zh-CN';
+  if (nav.startsWith('zh-TW') || nav.startsWith('zh-HK')) return 'zh-TW';
+  if (nav.startsWith('zh')) return 'zh-CN';
+  if (nav.startsWith('ja')) return 'ja-JP';
+  if (nav.startsWith('ko')) return 'ko-KR';
+  if (nav.startsWith('de')) return 'de-DE';
+  if (nav.startsWith('fr')) return 'fr-FR';
+  if (nav.startsWith('es')) return 'es-ES';
+  return 'en-US';
+}
+
+function setLocale(lang) {
+  if (I18N_LOCALES[lang]) {
+    currentLocale = lang;
+    localStorage.setItem('parentcontrol_lang', lang);
+    if (typeof applyI18n === 'function') {
+      applyI18n();
+    }
+  }
+}
+
+function t(key, params = {}) {
+  const dict = I18N_LOCALES[currentLocale] || I18N_LOCALES['zh-CN'] || {};
+  let text = dict[key] || (I18N_LOCALES['en-US'] && I18N_LOCALES['en-US'][key]) || key;
+  for (const [k, v] of Object.entries(params)) {
+    text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), v);
+  }
+  return text;
+}
+

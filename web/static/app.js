@@ -1,4 +1,10 @@
 // 家长控制系统前端交互逻辑 - 完整全功能版
+// 安全兜底保护
+if (typeof window.t !== 'function') window.t = (k) => k;
+if (typeof window.getLocale !== 'function') window.getLocale = () => 'zh-CN';
+if (typeof window.tDpiCategory !== 'function') window.tDpiCategory = (name) => name;
+if (typeof window.tDpiApp !== 'function') window.tDpiApp = (name) => name;
+
 let appState = {
     members: [],
     devices: [],
