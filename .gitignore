@@ -9,6 +9,7 @@ bin/
 # Test and coverage artifacts
 *.out
 *.test
+.build/
 
 # IDE and OS
 .DS_Store
