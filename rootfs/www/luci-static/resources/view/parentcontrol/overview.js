@@ -78,9 +78,20 @@ return view.extend({
 				])
 			]),
 
-			// 内嵌控制台
+			// 内嵌控制台与 SSL 信任指引
 			E('div', { 'class': 'cbi-section', 'style': 'margin-top:16px;' }, [
-				E('h3', {}, _('内嵌控制面板')),
+				E('div', { 'style': 'display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;' }, [
+					E('h3', { 'style': 'margin:0;' }, _('内嵌控制面板')),
+					isHttps ? E('div', { 'class': 'text-xs', 'style': 'font-size:12px; color:#64748b;' }, [
+						_('若内嵌显示证书错误，请先 '),
+						E('a', {
+							'href': dashboardUrl,
+							'target': '_blank',
+							'style': 'color:#059669; font-weight:bold; text-decoration:underline;'
+						}, [ _('点击这里在新标签页信任证书') ]),
+						_(' 或直接使用上方直达按钮')
+					]) : E('span', {})
+				]),
 				E('div', {
 					'style': 'width:100%; border:1px solid #cbd5e1; border-radius:8px; overflow:hidden; background:#fff; box-shadow:0 2px 4px rgba(0,0,0,0.05);'
 				}, [
