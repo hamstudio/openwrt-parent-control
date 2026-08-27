@@ -33,6 +33,45 @@
     <!-- 顶部全局 Toast 容器 -->
     <div id="toastContainer" class="fixed top-4 right-4 z-50 flex flex-col space-y-2 pointer-events-none"></div>
 
+    <!-- 4位 PIN 码锁屏弹窗 Modal -->
+    <div id="pinLockModal" class="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 hidden">
+        <div class="bg-white dark:bg-slate-800 rounded-3xl max-w-xs w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-700 flex flex-col items-center text-center space-y-6">
+            <div class="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 flex items-center justify-center shadow-md shadow-indigo-500/10">
+                <i data-lucide="lock" class="w-7 h-7"></i>
+            </div>
+            <div>
+                <h3 class="font-extrabold text-lg text-slate-800 dark:text-white">家长安全验证</h3>
+                <p class="text-xs text-slate-400 mt-1">请输入 4 位数访问密码进入控制台</p>
+            </div>
+
+            <!-- 4 个圆点指示器 -->
+            <div class="flex items-center justify-center space-x-4 py-1">
+                <span id="pinDot0" class="w-3.5 h-3.5 rounded-full border-2 border-slate-300 dark:border-slate-600 transition-all"></span>
+                <span id="pinDot1" class="w-3.5 h-3.5 rounded-full border-2 border-slate-300 dark:border-slate-600 transition-all"></span>
+                <span id="pinDot2" class="w-3.5 h-3.5 rounded-full border-2 border-slate-300 dark:border-slate-600 transition-all"></span>
+                <span id="pinDot3" class="w-3.5 h-3.5 rounded-full border-2 border-slate-300 dark:border-slate-600 transition-all"></span>
+            </div>
+
+            <!-- 屏幕数字按键 -->
+            <div class="grid grid-cols-3 gap-3 w-full max-w-[240px]">
+                <button onclick="pressPinKey('1')" class="h-14 rounded-2xl bg-slate-100 hover:bg-slate-200 active:scale-90 dark:bg-slate-700/60 dark:hover:bg-slate-700 text-lg font-bold transition">1</button>
+                <button onclick="pressPinKey('2')" class="h-14 rounded-2xl bg-slate-100 hover:bg-slate-200 active:scale-90 dark:bg-slate-700/60 dark:hover:bg-slate-700 text-lg font-bold transition">2</button>
+                <button onclick="pressPinKey('3')" class="h-14 rounded-2xl bg-slate-100 hover:bg-slate-200 active:scale-90 dark:bg-slate-700/60 dark:hover:bg-slate-700 text-lg font-bold transition">3</button>
+                <button onclick="pressPinKey('4')" class="h-14 rounded-2xl bg-slate-100 hover:bg-slate-200 active:scale-90 dark:bg-slate-700/60 dark:hover:bg-slate-700 text-lg font-bold transition">4</button>
+                <button onclick="pressPinKey('5')" class="h-14 rounded-2xl bg-slate-100 hover:bg-slate-200 active:scale-90 dark:bg-slate-700/60 dark:hover:bg-slate-700 text-lg font-bold transition">5</button>
+                <button onclick="pressPinKey('6')" class="h-14 rounded-2xl bg-slate-100 hover:bg-slate-200 active:scale-90 dark:bg-slate-700/60 dark:hover:bg-slate-700 text-lg font-bold transition">6</button>
+                <button onclick="pressPinKey('7')" class="h-14 rounded-2xl bg-slate-100 hover:bg-slate-200 active:scale-90 dark:bg-slate-700/60 dark:hover:bg-slate-700 text-lg font-bold transition">7</button>
+                <button onclick="pressPinKey('8')" class="h-14 rounded-2xl bg-slate-100 hover:bg-slate-200 active:scale-90 dark:bg-slate-700/60 dark:hover:bg-slate-700 text-lg font-bold transition">8</button>
+                <button onclick="pressPinKey('9')" class="h-14 rounded-2xl bg-slate-100 hover:bg-slate-200 active:scale-90 dark:bg-slate-700/60 dark:hover:bg-slate-700 text-lg font-bold transition">9</button>
+                <button onclick="clearPinKey()" class="h-14 rounded-2xl text-xs font-semibold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition">清空</button>
+                <button onclick="pressPinKey('0')" class="h-14 rounded-2xl bg-slate-100 hover:bg-slate-200 active:scale-90 dark:bg-slate-700/60 dark:hover:bg-slate-700 text-lg font-bold transition">0</button>
+                <button onclick="deletePinKey()" class="h-14 rounded-2xl flex items-center justify-center text-slate-500 hover:bg-slate-200 active:scale-90 dark:hover:bg-slate-700 transition">
+                    <i data-lucide="delete" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- 顶部导航栏 -->
     <header class="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md sticky top-0 z-30 border-b border-slate-200 dark:border-slate-700">
         <div class="max-w-6xl mx-auto px-4 py-3.5 flex items-center justify-between">
@@ -51,6 +90,9 @@
 
             <!-- 右侧操作 -->
             <div class="flex items-center space-x-2">
+                <button id="lockConsoleBtn" onclick="lockConsole()" class="hidden p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition" title="立即锁定控制台">
+                    <i data-lucide="lock" class="w-4 h-4"></i>
+                </button>
                 <button id="themeToggle" class="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition" title="切换深浅主题">
                     <i data-lucide="moon" class="w-5 h-5 dark:hidden"></i>
                     <i data-lucide="sun" class="w-5 h-5 hidden dark:block text-amber-400"></i>
@@ -98,14 +140,14 @@
 
             <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-sm hover:border-purple-500/30 transition">
                 <div class="flex items-center justify-between text-slate-400 text-xs font-medium mb-2">
-                    <span>防绕过保护</span>
-                    <i data-lucide="lock" class="w-4 h-4 text-purple-500"></i>
+                    <span>访问保护</span>
+                    <i data-lucide="shield" class="w-4 h-4 text-purple-500"></i>
                 </div>
-                <div class="text-sm font-bold text-emerald-600 dark:text-emerald-400 mt-1 flex items-center space-x-1">
-                    <i data-lucide="check-circle" class="w-4 h-4"></i>
-                    <span>DNS/DoH 劫持生效</span>
+                <div class="text-sm font-bold text-slate-800 dark:text-white mt-1 flex items-center space-x-1" id="pinProtectionBadge">
+                    <i data-lucide="unlock" class="w-4 h-4 text-slate-400"></i>
+                    <span>未设密码锁</span>
                 </div>
-                <div class="text-xs text-slate-400 mt-1">SafeSearch 强制开启</div>
+                <div class="text-xs text-slate-400 mt-1">SafeSearch & DNS 劫持生效</div>
             </div>
         </div>
 
@@ -181,6 +223,21 @@
             </div>
 
             <div class="space-y-4">
+                <!-- 4位 PIN 码设置 -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-700/60 gap-3">
+                    <div>
+                        <div class="font-semibold text-sm text-slate-800 dark:text-slate-100 flex items-center space-x-1.5">
+                            <i data-lucide="key-round" class="w-4 h-4 text-indigo-500"></i>
+                            <span>4 位数访问密码锁 (PIN 码保护)</span>
+                        </div>
+                        <div class="text-xs text-slate-400 mt-0.5">开启后，进入控制台和修改规则需先输入 4 位数字密码，留空则不设密码</div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <input type="password" id="settingPinCode" maxlength="4" placeholder="4位数字" class="w-28 px-3 py-1.5 rounded-xl text-center font-mono tracking-widest bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <button onclick="clearPinSetting()" class="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">清除</button>
+                    </div>
+                </div>
+
                 <div class="flex items-center justify-between p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-700/60">
                     <div>
                         <div class="font-semibold text-sm text-slate-800 dark:text-slate-100">启用家长控制总开关</div>

@@ -77,6 +77,7 @@ type AppCategory struct {
 type GlobalSettings struct {
 	Enabled           bool     `json:"enabled"`             // 主开关
 	WebPort           int      `json:"web_port"`            // 独立 Web 控制台端口 (默认 8088)
+	PinCode           string   `json:"pin_code"`            // 可选的 4 位数访问密码，为空表示不启用
 	EnforceSafeSearch bool     `json:"enforce_safe_search"` // 全局 SafeSearch
 	BlockDoHDoT       bool     `json:"block_doh_dot"`       // 阻断公共 DoH/DoT 防止绕过
 	IsolateNewDevices bool     `json:"isolate_new_devices"` // 新设备接入默认隔离（防 MAC 随机化）
@@ -95,5 +96,6 @@ type SystemStatus struct {
 	BlockedCountToday int64     `json:"blocked_count_today"`
 	KernelDPIReady    bool      `json:"kernel_dpi_ready"`
 	AppCount          int       `json:"app_count"`
+	PinRequired       bool      `json:"pin_required"` // 是否启用了 4 位数密码锁
 	ServerTime        time.Time `json:"server_time"`
 }

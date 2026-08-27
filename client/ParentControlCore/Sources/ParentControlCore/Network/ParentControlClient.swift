@@ -25,10 +25,12 @@ public enum ParentControlError: LocalizedError, Sendable {
 
 public actor ParentControlClient {
     private var baseURL: URL
+    private var pinCode: String?
     private let session: URLSession
 
-    public init(baseURLString: String = "http://192.168.0.110:8088", session: URLSession = .shared) {
+    public init(baseURLString: String = "http://192.168.0.110:8088", pinCode: String? = nil, session: URLSession = .shared) {
         self.baseURL = URL(string: baseURLString) ?? URL(string: "http://192.168.0.110:8088")!
+        self.pinCode = pinCode
         self.session = session
     }
 
@@ -36,6 +38,10 @@ public actor ParentControlClient {
         if let url = URL(string: newURLString) {
             self.baseURL = url
         }
+    }
+
+    public func setPinCode(_ pin: String?) {
+        self.pinCode = pin
     }
 
     public func currentBaseURL() -> String {
@@ -120,6 +126,9 @@ public actor ParentControlClient {
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
         request.timeoutInterval = 5
+        if let pin = pinCode, !pin.isEmpty {
+            request.setValue(pin, forHTTPHeaderField: "X-Pin-Code")
+        }
 
         let (data, response) = try await session.data(for: request)
         guard let httpRes = response as? HTTPURLResponse, (200...299).contains(httpRes.statusCode) else {
@@ -161,6 +170,9 @@ public actor ParentControlClient {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.timeoutInterval = 5
+        if let pin = pinCode, !pin.isEmpty {
+            request.setValue(pin, forHTTPHeaderField: "X-Pin-Code")
+        }
 
         do {
             let (data, response) = try await session.data(for: request)
@@ -184,6 +196,9 @@ public actor ParentControlClient {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 5
+        if let pin = pinCode, !pin.isEmpty {
+            request.setValue(pin, forHTTPHeaderField: "X-Pin-Code")
+        }
 
         do {
             request.httpBody = try JSONEncoder().encode(body)
@@ -207,6 +222,9 @@ public actor ParentControlClient {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.timeoutInterval = 5
+        if let pin = pinCode, !pin.isEmpty {
+            request.setValue(pin, forHTTPHeaderField: "X-Pin-Code")
+        }
 
         do {
             let (data, response) = try await session.data(for: request)

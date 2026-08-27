@@ -4,8 +4,134 @@ let appState = {
     devices: [],
     categories: [],
     settings: {},
-    status: {}
+    status: {},
+    currentPinInput: ''
 };
+
+// 获取已存储的 PIN 码
+function getStoredPin() {
+    return localStorage.getItem('parentcontrol_pin') || '';
+}
+
+function setStoredPin(pin) {
+    if (pin) {
+        localStorage.setItem('parentcontrol_pin', pin);
+    } else {
+        localStorage.removeItem('parentcontrol_pin');
+    }
+}
+
+// 封装带 PIN 鉴权的 Fetch
+async function authFetch(url, options = {}) {
+    options.headers = options.headers || {};
+    const pin = getStoredPin();
+    if (pin) {
+        if (options.headers instanceof Headers) {
+            options.headers.set('X-Pin-Code', pin);
+        } else {
+            options.headers['X-Pin-Code'] = pin;
+        }
+    }
+
+    const res = await fetch(url, options);
+    if (res.status === 401) {
+        // 需要验证 PIN 码
+        openPinLockModal();
+        throw new Error('Unauthorized: PIN code required');
+    }
+    return res;
+}
+
+// PIN 码输入键盘逻辑
+function openPinLockModal() {
+    appState.currentPinInput = '';
+    updatePinDots();
+    document.getElementById('pinLockModal').classList.remove('hidden');
+    lucide.createIcons();
+}
+
+function closePinLockModal() {
+    document.getElementById('pinLockModal').classList.add('hidden');
+    appState.currentPinInput = '';
+}
+
+function lockConsole() {
+    setStoredPin('');
+    openPinLockModal();
+}
+
+function pressPinKey(digit) {
+    if (appState.currentPinInput.length < 4) {
+        appState.currentPinInput += digit;
+        updatePinDots();
+        if (appState.currentPinInput.length === 4) {
+            submitPinVerification();
+        }
+    }
+}
+
+function deletePinKey() {
+    if (appState.currentPinInput.length > 0) {
+        appState.currentPinInput = appState.currentPinInput.slice(0, -1);
+        updatePinDots();
+    }
+}
+
+function clearPinKey() {
+    appState.currentPinInput = '';
+    updatePinDots();
+}
+
+function updatePinDots() {
+    const len = appState.currentPinInput.length;
+    for (let i = 0; i < 4; i++) {
+        const dot = document.getElementById('pinDot' + i);
+        if (i < len) {
+            dot.className = 'w-3.5 h-3.5 rounded-full bg-indigo-600 border-2 border-indigo-600 scale-110 transition-all';
+        } else {
+            dot.className = 'w-3.5 h-3.5 rounded-full border-2 border-slate-300 dark:border-slate-600 transition-all';
+        }
+    }
+}
+
+async function submitPinVerification() {
+    const enteredPin = appState.currentPinInput;
+    try {
+        const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pin: enteredPin })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            setStoredPin(enteredPin);
+            closePinLockModal();
+            showToast('身份验证成功', 'success');
+            await Promise.all([fetchStatus(), fetchMembers(), fetchDevices(), fetchSettings()]);
+            lucide.createIcons();
+        } else {
+            showToast('密码错误，请重新输入', 'error');
+            clearPinKey();
+        }
+    } catch (e) {
+        showToast('验证请求失败', 'error');
+        clearPinKey();
+    }
+}
+
+// 物理键盘监听
+document.addEventListener('keydown', (e) => {
+    const modal = document.getElementById('pinLockModal');
+    if (!modal.classList.contains('hidden')) {
+        if (e.key >= '0' && e.key <= '9') {
+            pressPinKey(e.key);
+        } else if (e.key === 'Backspace') {
+            deletePinKey();
+        } else if (e.key === 'Escape') {
+            clearPinKey();
+        }
+    }
+});
 
 // Toast 提示通知系统
 function showToast(message, type = 'success') {
@@ -54,19 +180,27 @@ function showToast(message, type = 'success') {
 document.addEventListener('DOMContentLoaded', async () => {
     initTheme();
     lucide.createIcons();
-    await Promise.all([
-        fetchStatus(),
-        fetchCategories(),
-        fetchMembers(),
-        fetchDevices(),
-        fetchSettings()
-    ]);
+    await fetchStatus();
+
+    // 如果启用了 PIN 且本地没有存储 PIN，则先锁屏提示输入
+    if (appState.status && appState.status.pin_required && !getStoredPin()) {
+        openPinLockModal();
+    } else {
+        await Promise.all([
+            fetchCategories(),
+            fetchMembers(),
+            fetchDevices(),
+            fetchSettings()
+        ]);
+    }
     lucide.createIcons();
 
     // 5秒轮询刷新状态与设备
     setInterval(async () => {
-        await Promise.all([fetchStatus(), fetchMembers(), fetchDevices()]);
-        lucide.createIcons();
+        if (document.getElementById('pinLockModal').classList.contains('hidden')) {
+            await Promise.all([fetchStatus(), fetchMembers(), fetchDevices()]);
+            lucide.createIcons();
+        }
     }, 5000);
 });
 
@@ -124,6 +258,20 @@ async function fetchStatus() {
             latencyBadge.innerText = `直连 ${latency}ms`;
         }
 
+        const lockConsoleBtn = document.getElementById('lockConsoleBtn');
+        const pinProtectionBadge = document.getElementById('pinProtectionBadge');
+        if (data.pin_required) {
+            if (lockConsoleBtn) lockConsoleBtn.classList.remove('hidden');
+            if (pinProtectionBadge) {
+                pinProtectionBadge.innerHTML = '<i data-lucide="lock" class="w-4 h-4 text-emerald-500"></i><span class="text-emerald-600 dark:text-emerald-400">4位密码已保护</span>';
+            }
+        } else {
+            if (lockConsoleBtn) lockConsoleBtn.classList.add('hidden');
+            if (pinProtectionBadge) {
+                pinProtectionBadge.innerHTML = '<i data-lucide="unlock" class="w-4 h-4 text-slate-400"></i><span>未设密码锁</span>';
+            }
+        }
+
         const badge = document.getElementById('kernelStatusBadge');
         if (data.kernel_dpi_ready) {
             badge.className = 'hidden md:flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800';
@@ -144,7 +292,7 @@ async function fetchStatus() {
 
 async function fetchCategories() {
     try {
-        const res = await fetch('/api/apps');
+        const res = await authFetch('/api/apps');
         appState.categories = await res.json();
     } catch (e) {
         console.error('Fetch apps failed:', e);
@@ -153,7 +301,7 @@ async function fetchCategories() {
 
 async function fetchMembers() {
     try {
-        const res = await fetch('/api/members');
+        const res = await authFetch('/api/members');
         appState.members = await res.json() || [];
         renderMembers();
     } catch (e) {
@@ -163,7 +311,7 @@ async function fetchMembers() {
 
 async function fetchDevices() {
     try {
-        const res = await fetch('/api/devices');
+        const res = await authFetch('/api/devices');
         appState.devices = await res.json() || [];
         renderDevices();
     } catch (e) {
@@ -173,12 +321,13 @@ async function fetchDevices() {
 
 async function fetchSettings() {
     try {
-        const res = await fetch('/api/settings');
+        const res = await authFetch('/api/settings');
         appState.settings = await res.json();
         document.getElementById('settingGlobalEnable').checked = appState.settings.enabled;
         document.getElementById('settingSafeSearch').checked = appState.settings.enforce_safe_search;
         document.getElementById('settingBlockDoH').checked = appState.settings.block_doh_dot;
         document.getElementById('settingIsolateNew').checked = appState.settings.isolate_new_devices;
+        document.getElementById('settingPinCode').value = appState.settings.pin_code || '';
     } catch (e) {
         console.error('Fetch settings failed:', e);
     }
@@ -361,7 +510,7 @@ async function applyBonusTime(minutes) {
     closeBonusModal();
 
     try {
-        const res = await fetch(`/api/members/${id}/bonus?minutes=${minutes}`, { method: 'POST' });
+        const res = await authFetch(`/api/members/${id}/bonus?minutes=${minutes}`, { method: 'POST' });
         if (res.ok) {
             showToast(`已成功奖励 ${minutes} 分钟上网时间！`, 'success');
             await fetchMembers();
@@ -537,7 +686,7 @@ async function saveMemberForm() {
     };
 
     try {
-        const res = await fetch('/api/members', {
+        const res = await authFetch('/api/members', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -561,7 +710,7 @@ async function deleteCurrentMember() {
     if (!id || !confirm('确定要删除该受管成员吗？')) return;
 
     try {
-        await fetch(`/api/members/${id}`, { method: 'DELETE' });
+        await authFetch(`/api/members/${id}`, { method: 'DELETE' });
         closeMemberModal();
         showToast('受管成员已删除', 'info');
         await fetchMembers();
@@ -574,7 +723,7 @@ async function deleteCurrentMember() {
 // 一键断网
 async function lockMember(id) {
     try {
-        const res = await fetch(`/api/members/${id}/lock`, { method: 'POST' });
+        const res = await authFetch(`/api/members/${id}/lock`, { method: 'POST' });
         if (res.ok) {
             showToast('已切断该成员的网络连接', 'warning');
             await fetchMembers();
@@ -588,7 +737,7 @@ async function lockMember(id) {
 // 恢复上网
 async function unlockMember(id) {
     try {
-        const res = await fetch(`/api/members/${id}/unlock`, { method: 'POST' });
+        const res = await authFetch(`/api/members/${id}/unlock`, { method: 'POST' });
         if (res.ok) {
             showToast('已恢复正常上网', 'success');
             await fetchMembers();
@@ -599,23 +748,40 @@ async function unlockMember(id) {
     }
 }
 
+function clearPinSetting() {
+    document.getElementById('settingPinCode').value = '';
+}
+
 // 保存全局设置
 async function saveGlobalSettings() {
+    const pinVal = document.getElementById('settingPinCode').value.trim();
+    if (pinVal && (!/^\d{4}$/.test(pinVal))) {
+        showToast('密码必须为 4 位数字！', 'warning');
+        return;
+    }
+
     const payload = {
         enabled: document.getElementById('settingGlobalEnable').checked,
+        pin_code: pinVal,
         enforce_safe_search: document.getElementById('settingSafeSearch').checked,
         block_doh_dot: document.getElementById('settingBlockDoH').checked,
         isolate_new_devices: document.getElementById('settingIsolateNew').checked,
     };
 
     try {
-        const res = await fetch('/api/settings', {
+        const res = await authFetch('/api/settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
         if (res.ok) {
+            if (pinVal) {
+                setStoredPin(pinVal);
+            } else {
+                setStoredPin('');
+            }
             showToast('全局安全设置已成功下发并生效！', 'success');
+            await fetchStatus();
         }
     } catch (e) {
         showToast('保存设置失败', 'error');

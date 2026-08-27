@@ -176,8 +176,8 @@ struct MemberCardView: View {
                     .font(.caption2.bold())
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(Color.purple.opacity(0.15))
-                    .foregroundColor(.purple)
+                    .background(Color.orange.opacity(0.15))
+                    .foregroundColor(.orange)
                     .cornerRadius(6)
             } else {
                 Text("正常")

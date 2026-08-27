@@ -58,18 +58,18 @@ func NewServer(
 func (s *Server) Start(port int) error {
 	mux := http.NewServeMux()
 
-	// 1. API 路由
+	// 1. 认证与公开路由
 	mux.HandleFunc("/api/status", s.handleStatus)
-	mux.HandleFunc("/api/devices", s.handleDevices)
-	mux.HandleFunc("/api/members", s.handleMembers)
-	mux.HandleFunc("/api/members/", s.handleMemberActions)
-	mux.HandleFunc("/api/apps", s.handleApps)
-	mux.HandleFunc("/api/apps/", s.handleAppActions)
-	mux.HandleFunc("/api/categories", s.handleCategories)
-	mux.HandleFunc("/api/categories/", s.handleCategoryActions)
-	mux.HandleFunc("/api/settings", s.handleSettings)
+	mux.HandleFunc("/api/auth/login", s.handleAuthLogin)
 
-	// 2. 静态文件与前端 WebUI
+	// 2. 核心业务受保护路由
+	mux.HandleFunc("/api/devices", s.requireAuth(s.handleDevices))
+	mux.HandleFunc("/api/members", s.requireAuth(s.handleMembers))
+	mux.HandleFunc("/api/members/", s.requireAuth(s.handleMemberActions))
+	mux.HandleFunc("/api/apps", s.requireAuth(s.handleApps))
+	mux.HandleFunc("/api/settings", s.requireAuth(s.handleSettings))
+
+	// 3. 静态文件与前端 WebUI
 	staticSub, err := fs.Sub(s.staticFS, "static")
 	if err != nil {
 		log.Printf("[API] Failed to sub static FS: %v", err)
@@ -102,6 +102,62 @@ func (s *Server) jsonResponse(w http.ResponseWriter, status int, data interface{
 	_ = json.NewEncoder(w).Encode(data)
 }
 
+// requireAuth PIN 码权限校验中间件
+func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		pinRequired := s.config.Data.Settings.PinCode
+		if pinRequired != "" {
+			// 从 Header、Cookie 或 Query 获取
+			pin := r.Header.Get("X-Pin-Code")
+			if pin == "" {
+				authHeader := r.Header.Get("Authorization")
+				if strings.HasPrefix(authHeader, "Bearer ") {
+					pin = strings.TrimPrefix(authHeader, "Bearer ")
+				}
+			}
+			if pin == "" {
+				pin = r.URL.Query().Get("pin")
+			}
+
+			if pin != pinRequired {
+				s.jsonResponse(w, http.StatusUnauthorized, map[string]string{
+					"error": "PIN code required or invalid",
+				})
+				return
+			}
+		}
+		next(w, r)
+	}
+}
+
+func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		s.jsonResponse(w, http.StatusMethodNotAllowed, map[string]string{"error": "Method not allowed"})
+		return
+	}
+
+	var req struct {
+		Pin string `json:"pin"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "Invalid request"})
+		return
+	}
+
+	configuredPin := s.config.Data.Settings.PinCode
+	if configuredPin == "" || req.Pin == configuredPin {
+		s.jsonResponse(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"token":   configuredPin,
+		})
+	} else {
+		s.jsonResponse(w, http.StatusUnauthorized, map[string]interface{}{
+			"success": false,
+			"error":   "PIN 码错误",
+		})
+	}
+}
+
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	devices := s.devTracker.ScanDevices()
 	activeCount := 0
@@ -114,14 +170,15 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	members := s.engine.GetMembers()
 
 	status := models.SystemStatus{
-		Running:        true,
-		UptimeSeconds:  int64(time.Since(s.startTime).Seconds()),
-		TotalDevices:   len(devices),
-		ActiveDevices:  activeCount,
-		ManagedMembers: len(members),
-		KernelDPIReady: s.dpiMgr.IsReady(),
-		AppCount:       len(s.dpiMgr.GetAllApps()),
-		ServerTime:     time.Now(),
+		Running:           true,
+		UptimeSeconds:     int64(time.Since(s.startTime).Seconds()),
+		TotalDevices:      len(devices),
+		ActiveDevices:     activeCount,
+		ManagedMembers:    len(members),
+		KernelDPIReady:    s.dpiMgr.IsReady(),
+		AppCount:          len(s.dpiMgr.GetCategories()),
+		PinRequired:       s.config.Data.Settings.PinCode != "",
+		ServerTime:        time.Now(),
 	}
 	s.jsonResponse(w, http.StatusOK, status)
 }
@@ -132,160 +189,8 @@ func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleApps(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		categories := s.dpiMgr.GetCategories()
-		s.jsonResponse(w, http.StatusOK, categories)
-	case http.MethodPost:
-		var app models.AppInfo
-		if err := json.NewDecoder(r.Body).Decode(&app); err != nil {
-			s.jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "Invalid app payload"})
-			return
-		}
-		created, err := s.dpiMgr.AddApp(app)
-		if err != nil {
-			s.jsonResponse(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			return
-		}
-		// 持久化自定义数据
-		customApps, customCats := s.dpiMgr.GetCustomData()
-		s.config.Data.CustomApps = customApps
-		s.config.Data.CustomCategories = customCats
-		_ = s.config.Save()
-
-		s.jsonResponse(w, http.StatusCreated, created)
-	default:
-		s.jsonResponse(w, http.StatusMethodNotAllowed, map[string]string{"error": "Method not allowed"})
-	}
-}
-
-func (s *Server) handleAppActions(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/api/apps/")
-	if path == "" {
-		s.jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "App ID required"})
-		return
-	}
-	appID, err := strconv.Atoi(path)
-	if err != nil {
-		s.jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "Invalid app ID"})
-		return
-	}
-
-	switch r.Method {
-	case http.MethodGet:
-		app, ok := s.dpiMgr.GetApp(appID)
-		if !ok {
-			s.jsonResponse(w, http.StatusNotFound, map[string]string{"error": "App not found"})
-			return
-		}
-		s.jsonResponse(w, http.StatusOK, app)
-	case http.MethodPut, http.MethodPost:
-		var app models.AppInfo
-		if err := json.NewDecoder(r.Body).Decode(&app); err != nil {
-			s.jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "Invalid app payload"})
-			return
-		}
-		updated, err := s.dpiMgr.UpdateApp(appID, app)
-		if err != nil {
-			s.jsonResponse(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			return
-		}
-		customApps, customCats := s.dpiMgr.GetCustomData()
-		s.config.Data.CustomApps = customApps
-		s.config.Data.CustomCategories = customCats
-		_ = s.config.Save()
-
-		s.jsonResponse(w, http.StatusOK, updated)
-	case http.MethodDelete:
-		if err := s.dpiMgr.DeleteApp(appID); err != nil {
-			s.jsonResponse(w, http.StatusNotFound, map[string]string{"error": err.Error()})
-			return
-		}
-
-		// 同步从成员封禁列表中剔除被删除的 App ID
-		members := s.engine.GetMembers()
-		for _, m := range members {
-			newBlocked := make([]int, 0, len(m.BlockedAppIDs))
-			changed := false
-			for _, bid := range m.BlockedAppIDs {
-				if bid == appID {
-					changed = true
-				} else {
-					newBlocked = append(newBlocked, bid)
-				}
-			}
-			if changed {
-				m.BlockedAppIDs = newBlocked
-				s.engine.SetMember(m)
-			}
-		}
-
-		customApps, customCats := s.dpiMgr.GetCustomData()
-		s.config.Data.CustomApps = customApps
-		s.config.Data.CustomCategories = customCats
-		s.config.Data.Members = s.engine.GetMembers()
-		_ = s.config.Save()
-
-		s.engine.EvaluateAndApply(time.Now())
-		s.jsonResponse(w, http.StatusOK, map[string]string{"result": "deleted", "id": strconv.Itoa(appID)})
-	default:
-		s.jsonResponse(w, http.StatusMethodNotAllowed, map[string]string{"error": "Method not allowed"})
-	}
-}
-
-func (s *Server) handleCategories(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		s.jsonResponse(w, http.StatusOK, s.dpiMgr.GetCategories())
-	case http.MethodPost:
-		var cat models.AppCategory
-		if err := json.NewDecoder(r.Body).Decode(&cat); err != nil {
-			s.jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "Invalid category payload"})
-			return
-		}
-		created, err := s.dpiMgr.AddCategory(cat)
-		if err != nil {
-			s.jsonResponse(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			return
-		}
-		customApps, customCats := s.dpiMgr.GetCustomData()
-		s.config.Data.CustomApps = customApps
-		s.config.Data.CustomCategories = customCats
-		_ = s.config.Save()
-
-		s.jsonResponse(w, http.StatusCreated, created)
-	default:
-		s.jsonResponse(w, http.StatusMethodNotAllowed, map[string]string{"error": "Method not allowed"})
-	}
-}
-
-func (s *Server) handleCategoryActions(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/api/categories/")
-	if path == "" {
-		s.jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "Category ID required"})
-		return
-	}
-	catID, err := strconv.Atoi(path)
-	if err != nil {
-		s.jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "Invalid category ID"})
-		return
-	}
-
-	if r.Method == http.MethodDelete {
-		if err := s.dpiMgr.DeleteCategory(catID); err != nil {
-			s.jsonResponse(w, http.StatusNotFound, map[string]string{"error": err.Error()})
-			return
-		}
-		customApps, customCats := s.dpiMgr.GetCustomData()
-		s.config.Data.CustomApps = customApps
-		s.config.Data.CustomCategories = customCats
-		_ = s.config.Save()
-
-		s.jsonResponse(w, http.StatusOK, map[string]string{"result": "deleted", "id": strconv.Itoa(catID)})
-		return
-	}
-
-	s.jsonResponse(w, http.StatusMethodNotAllowed, map[string]string{"error": "Method not allowed"})
+	categories := s.dpiMgr.GetCategories()
+	s.jsonResponse(w, http.StatusOK, categories)
 }
 
 func (s *Server) handleMembers(w http.ResponseWriter, r *http.Request) {

@@ -251,12 +251,14 @@ public struct AppCategory: Codable, Identifiable, Hashable, Sendable {
 // MARK: - GlobalSettings
 public struct GlobalSettings: Codable, Hashable, Sendable {
     public var enabled: Bool
+    public var pinCode: String?
     public var enforceSafeSearch: Bool
     public var blockDoHDoT: Bool
     public var isolateNewDevices: Bool
 
     public enum CodingKeys: String, CodingKey {
         case enabled
+        case pinCode = "pin_code"
         case enforceSafeSearch = "enforce_safe_search"
         case blockDoHDoT = "block_doh_dot"
         case isolateNewDevices = "isolate_new_devices"
@@ -264,11 +266,13 @@ public struct GlobalSettings: Codable, Hashable, Sendable {
 
     public init(
         enabled: Bool = true,
+        pinCode: String? = nil,
         enforceSafeSearch: Bool = true,
         blockDoHDoT: Bool = true,
         isolateNewDevices: Bool = false
     ) {
         self.enabled = enabled
+        self.pinCode = pinCode
         self.enforceSafeSearch = enforceSafeSearch
         self.blockDoHDoT = blockDoHDoT
         self.isolateNewDevices = isolateNewDevices
@@ -285,6 +289,7 @@ public struct SystemStatus: Codable, Hashable, Sendable {
     public let blockedCountToday: Int64
     public let kernelDpiReady: Bool
     public let appCount: Int
+    public let pinRequired: Bool?
     public let serverTime: String
 
     public enum CodingKeys: String, CodingKey {
@@ -296,6 +301,7 @@ public struct SystemStatus: Codable, Hashable, Sendable {
         case blockedCountToday = "blocked_count_today"
         case kernelDpiReady = "kernel_dpi_ready"
         case appCount = "app_count"
+        case pinRequired = "pin_required"
         case serverTime = "server_time"
     }
 }
