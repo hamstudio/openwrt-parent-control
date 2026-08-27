@@ -64,6 +64,7 @@ func (s *Server) Start(port int) error {
 
 	// 2. 核心业务受保护路由
 	mux.HandleFunc("/api/devices", s.requireAuth(s.handleDevices))
+	mux.HandleFunc("/api/devices/", s.requireAuth(s.handleDeviceActions))
 	mux.HandleFunc("/api/members", s.requireAuth(s.handleMembers))
 	mux.HandleFunc("/api/members/", s.requireAuth(s.handleMemberActions))
 	mux.HandleFunc("/api/apps", s.requireAuth(s.handleApps))
@@ -199,7 +200,90 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request) {
 	devices := s.devTracker.ScanDevices()
+	members := s.engine.GetMembers()
+	settings := s.engine.GetSettings()
+
+	// 构建 MAC -> Member 映射与黑名单集合
+	macToMember := make(map[string]*models.Member)
+	for _, m := range members {
+		for _, mac := range m.DeviceMACs {
+			macToMember[strings.ToLower(mac)] = &m
+		}
+	}
+
+	blacklistedMACs := make(map[string]bool)
+	for _, mac := range settings.CustomBlacklist {
+		blacklistedMACs[strings.ToLower(mac)] = true
+	}
+
+	for i := range devices {
+		normMAC := strings.ToLower(devices[i].MAC)
+		if m, ok := macToMember[normMAC]; ok {
+			devices[i].MemberID = m.ID
+			if m.IsLocked {
+				devices[i].IsLocked = true
+			}
+		}
+		if blacklistedMACs[normMAC] {
+			devices[i].IsLocked = true
+		}
+	}
+
 	s.jsonResponse(w, http.StatusOK, devices)
+}
+
+func (s *Server) handleDeviceActions(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/devices/")
+	parts := strings.Split(path, "/")
+	if len(parts) == 0 || parts[0] == "" {
+		s.jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "Device MAC required"})
+		return
+	}
+
+	mac := parts[0]
+
+	// 1. POST /api/devices/:mac/lock (单设备一键断网)
+	if r.Method == http.MethodPost && len(parts) == 2 && parts[1] == "lock" {
+		s.engine.LockDevice(mac)
+		s.config.Data.Settings = s.engine.GetSettings()
+		s.config.Data.Members = s.engine.GetMembers()
+		_ = s.config.Save()
+		s.engine.EvaluateAndApply(time.Now())
+		s.jsonResponse(w, http.StatusOK, map[string]string{"status": "locked", "mac": mac})
+		return
+	}
+
+	// 2. POST /api/devices/:mac/unlock (单设备恢复上网)
+	if r.Method == http.MethodPost && len(parts) == 2 && parts[1] == "unlock" {
+		s.engine.UnlockDevice(mac)
+		s.config.Data.Settings = s.engine.GetSettings()
+		s.config.Data.Members = s.engine.GetMembers()
+		_ = s.config.Save()
+		s.engine.EvaluateAndApply(time.Now())
+		s.jsonResponse(w, http.StatusOK, map[string]string{"status": "unlocked", "mac": mac})
+		return
+	}
+
+	// 3. POST /api/devices/:mac/assign (分配已有成员或解绑)
+	if r.Method == http.MethodPost && len(parts) == 2 && parts[1] == "assign" {
+		var req struct {
+			MemberID string `json:"member_id"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+
+		s.engine.AssignDeviceToMember(mac, req.MemberID)
+		s.config.Data.Members = s.engine.GetMembers()
+		_ = s.config.Save()
+		s.engine.EvaluateAndApply(time.Now())
+		s.jsonResponse(w, http.StatusOK, map[string]interface{}{
+			"status":    "assigned",
+			"mac":       mac,
+			"member_id": req.MemberID,
+		})
+		return
+	}
+
+	s.jsonResponse(w, http.StatusMethodNotAllowed, map[string]string{"error": "Method not allowed"})
 }
 
 func (s *Server) handleApps(w http.ResponseWriter, r *http.Request) {

@@ -14,6 +14,7 @@ type Device struct {
 	Vendor     string    `json:"vendor"`
 	Online     bool      `json:"online"`
 	MemberID   string    `json:"member_id"` // 所属家庭成员 ID，为空表示未分配
+	IsLocked   bool      `json:"is_locked"`  // 是否已被一键断网隔离
 	TxRate     uint64    `json:"tx_rate"`   // 实时上行速率 bytes/s
 	RxRate     uint64    `json:"rx_rate"`   // 实时下行速率 bytes/s
 	TotalBytes uint64    `json:"total_bytes"`

@@ -10,6 +10,7 @@ public struct Device: Codable, Identifiable, Hashable, Sendable {
     public let vendor: String
     public let online: boolValue
     public let memberId: String?
+    public var isLocked: Bool?
     public let txRate: UInt64
     public let rxRate: UInt64
     public let totalBytes: UInt64
@@ -21,6 +22,7 @@ public struct Device: Codable, Identifiable, Hashable, Sendable {
         case mac, ip, hostname, vendor, online
         case customName = "custom_name"
         case memberId = "member_id"
+        case isLocked = "is_locked"
         case txRate = "tx_rate"
         case rxRate = "rx_rate"
         case totalBytes = "total_bytes"
@@ -35,6 +37,7 @@ public struct Device: Codable, Identifiable, Hashable, Sendable {
         vendor: String,
         online: Bool,
         memberId: String? = nil,
+        isLocked: Bool? = false,
         txRate: UInt64 = 0,
         rxRate: UInt64 = 0,
         totalBytes: UInt64 = 0,
@@ -47,6 +50,7 @@ public struct Device: Codable, Identifiable, Hashable, Sendable {
         self.vendor = vendor
         self.online = online
         self.memberId = memberId
+        self.isLocked = isLocked
         self.txRate = txRate
         self.rxRate = rxRate
         self.totalBytes = totalBytes

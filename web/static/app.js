@@ -530,7 +530,7 @@ function renderDevices(filterKeyword = '') {
 
     tbody.innerHTML = filtered.map(d => {
         let memberName = `<span class="text-slate-400 text-xs">${t('unassigned')}</span>`;
-        const member = appState.members.find(m => m.device_macs && m.device_macs.includes(d.mac));
+        const member = appState.members.find(m => m.id === d.member_id || (m.device_macs && m.device_macs.includes(d.mac)));
         if (member) {
             memberName = `<span class="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 font-medium text-xs">${member.name}</span>`;
         }
@@ -538,6 +538,10 @@ function renderDevices(filterKeyword = '') {
         const speedText = d.rx_rate >= 1024 * 1024 
             ? (d.rx_rate / (1024 * 1024)).toFixed(1) + ' MB/s' 
             : (d.rx_rate / 1024).toFixed(0) + ' KB/s';
+
+        const statusBadge = d.is_locked
+            ? `<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-400 inline-flex items-center space-x-1"><i data-lucide="lock" class="w-3 h-3"></i><span>${t('locked')}</span></span>`
+            : `<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 inline-flex items-center space-x-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span><span>${t('normalOnline')}</span></span>`;
 
         return `
             <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-750/50 transition">
@@ -550,8 +554,25 @@ function renderDevices(filterKeyword = '') {
                 <td class="px-4 py-3 text-xs">${d.vendor || 'Generic'}</td>
                 <td class="px-4 py-3 text-xs font-mono text-emerald-600 dark:text-emerald-400 font-semibold">${d.online ? speedText : '-'}</td>
                 <td class="px-4 py-3">${memberName}</td>
+                <td class="px-4 py-3 text-center">${statusBadge}</td>
                 <td class="px-4 py-3 text-right">
-                    <button onclick="quickAssignDevice('${d.mac}')" class="text-emerald-600 hover:text-emerald-700 text-xs font-semibold hover:underline">${t('btnAssign')}</button>
+                    <div class="flex items-center justify-end space-x-2">
+                        <button onclick="openAssignModal('${d.mac}', '${(d.hostname || d.ip || d.mac).replace(/'/g, "\\'")}', '${member ? member.id : ''}')" class="text-emerald-600 hover:text-emerald-700 text-xs font-semibold hover:underline">
+                            ${t('btnAssign')}
+                        </button>
+                        <span class="text-slate-300 dark:text-slate-600">|</span>
+                        ${d.is_locked ? `
+                            <button onclick="toggleDeviceLock('${d.mac}', true)" class="text-emerald-600 hover:text-emerald-700 text-xs font-semibold hover:underline flex items-center space-x-1">
+                                <i data-lucide="unlock" class="w-3 h-3"></i>
+                                <span>${t('btnUnlock')}</span>
+                            </button>
+                        ` : `
+                            <button onclick="toggleDeviceLock('${d.mac}', false)" class="text-rose-500 hover:text-rose-600 text-xs font-semibold hover:underline flex items-center space-x-1">
+                                <i data-lucide="lock" class="w-3 h-3"></i>
+                                <span>${t('btnLock')}</span>
+                            </button>
+                        `}
+                    </div>
                 </td>
             </tr>
         `;
@@ -885,10 +906,115 @@ function toggleSelectAllCategory(classID) {
     updateSelectedCount();
 }
 
-function quickAssignDevice(mac) {
+// 设备一键断网 / 恢复上网
+async function toggleDeviceLock(mac, currentlyLocked) {
+    const action = currentlyLocked ? 'unlock' : 'lock';
+    try {
+        const res = await authFetch(`/api/devices/${mac}/${action}`, { method: 'POST' });
+        if (res.ok) {
+            showToast(currentlyLocked ? t('toastUnlocked') : t('toastLocked'), 'info');
+            await Promise.all([fetchStatus(), fetchMembers(), fetchDevices()]);
+            lucide.createIcons();
+        } else {
+            showToast('操作失败', 'error');
+        }
+    } catch (e) {
+        showToast('请求网络失败', 'error');
+    }
+}
+
+// 设备分配成员 Modal
+function openAssignModal(mac, deviceName, currentMemberId) {
+    document.getElementById('assignDeviceMAC').value = mac;
+    document.getElementById('assignModalSubtitle').innerText = `${t('colDeviceName')}: ${deviceName} (${mac})`;
+
+    const container = document.getElementById('assignMemberList');
+    const avatarMap = { boy: '👦', girl: '👧', student: '🧑‍🎓', child: '👶' };
+
+    let html = `
+        <label class="flex items-center justify-between p-3 rounded-2xl border ${!currentMemberId ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/30' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800'} cursor-pointer hover:border-emerald-500 transition">
+            <div class="flex items-center space-x-3">
+                <input type="radio" name="assignMemberRadio" value="" ${!currentMemberId ? 'checked' : ''} class="w-4 h-4 text-emerald-600">
+                <div class="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-500 text-sm">
+                    🚫
+                </div>
+                <div>
+                    <div class="font-bold text-xs text-slate-800 dark:text-slate-100">${t('unassigned')}</div>
+                    <div class="text-[11px] text-slate-400">解除该设备的成员绑定</div>
+                </div>
+            </div>
+        </label>
+    `;
+
+    if (appState.members && appState.members.length > 0) {
+        html += appState.members.map(m => {
+            const isSelected = m.id === currentMemberId;
+            const emoji = avatarMap[m.avatar] || '👦';
+            const devCount = m.device_macs ? m.device_macs.length : 0;
+            return `
+                <label class="flex items-center justify-between p-3 rounded-2xl border ${isSelected ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/30' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800'} cursor-pointer hover:border-emerald-500 transition">
+                    <div class="flex items-center space-x-3">
+                        <input type="radio" name="assignMemberRadio" value="${m.id}" ${isSelected ? 'checked' : ''} class="w-4 h-4 text-emerald-600">
+                        <div class="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 flex items-center justify-center text-base">
+                            ${emoji}
+                        </div>
+                        <div>
+                            <div class="font-bold text-xs text-slate-800 dark:text-slate-100">${m.name}</div>
+                            <div class="text-[11px] text-slate-400">已绑定 ${devCount} 台设备 · 每日配额 ${m.quota_minutes || 0} 分钟</div>
+                        </div>
+                    </div>
+                </label>
+            `;
+        }).join('');
+    }
+
+    container.innerHTML = html;
+    document.getElementById('assignModal').classList.remove('hidden');
+    lucide.createIcons();
+}
+
+function closeAssignModal() {
+    document.getElementById('assignModal').classList.add('hidden');
+}
+
+function openNewMemberFromAssign() {
+    const mac = document.getElementById('assignDeviceMAC').value;
+    closeAssignModal();
     openMemberModal();
-    const cb = document.querySelector(`input[name="modalDevice"][value="${mac}"]`);
-    if (cb) cb.checked = true;
+    if (mac) {
+        const cb = document.querySelector(`input[name="modalDevice"][value="${mac}"]`);
+        if (cb) cb.checked = true;
+    }
+}
+
+async function submitDeviceAssign() {
+    const mac = document.getElementById('assignDeviceMAC').value;
+    if (!mac) return;
+
+    const selectedRadio = document.querySelector('input[name="assignMemberRadio"]:checked');
+    const memberId = selectedRadio ? selectedRadio.value : '';
+
+    try {
+        const res = await authFetch(`/api/devices/${mac}/assign`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ member_id: memberId })
+        });
+        if (res.ok) {
+            closeAssignModal();
+            showToast('设备归属成员已成功更新！', 'success');
+            await Promise.all([fetchMembers(), fetchDevices()]);
+            lucide.createIcons();
+        } else {
+            showToast('分配成员失败', 'error');
+        }
+    } catch (e) {
+        showToast('请求网络失败', 'error');
+    }
+}
+
+function quickAssignDevice(mac) {
+    openAssignModal(mac, mac, '');
 }
 
 function editMember(id) {

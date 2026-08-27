@@ -166,6 +166,13 @@ func (pe *PolicyEngine) EvaluateAndApply(now time.Time) {
 		}
 	}
 
+	// 汇总黑名单中的 MAC 地址 (单设备一键断网)
+	for _, mac := range pe.settings.CustomBlacklist {
+		if mac != "" {
+			blockedMACs = append(blockedMACs, mac)
+		}
+	}
+
 	// 下发 iptables 阻断规则
 	_ = pe.fw.SyncBlockedMACs(blockedMACs)
 
@@ -326,6 +333,93 @@ func (pe *PolicyEngine) GetSettings() models.GlobalSettings {
 	pe.mu.RLock()
 	defer pe.mu.RUnlock()
 	return pe.settings
+}
+
+// LockDevice 对单个设备执行一键断网
+func (pe *PolicyEngine) LockDevice(mac string) {
+	pe.mu.Lock()
+	defer pe.mu.Unlock()
+
+	mac = strings.ToLower(strings.TrimSpace(mac))
+	if mac == "" {
+		return
+	}
+
+	// 检查是否已经在黑名单中
+	exists := false
+	for _, m := range pe.settings.CustomBlacklist {
+		if strings.ToLower(m) == mac {
+			exists = true
+			break
+		}
+	}
+	if !exists {
+		pe.settings.CustomBlacklist = append(pe.settings.CustomBlacklist, mac)
+	}
+
+	// 如果该设备属于某个成员，同时检查成员状态
+	for _, m := range pe.members {
+		for _, dmac := range m.DeviceMACs {
+			if strings.ToLower(dmac) == mac {
+				m.IsLocked = true
+				break
+			}
+		}
+	}
+}
+
+// UnlockDevice 解除单个设备的一键断网
+func (pe *PolicyEngine) UnlockDevice(mac string) {
+	pe.mu.Lock()
+	defer pe.mu.Unlock()
+
+	mac = strings.ToLower(strings.TrimSpace(mac))
+	newList := make([]string, 0, len(pe.settings.CustomBlacklist))
+	for _, m := range pe.settings.CustomBlacklist {
+		if strings.ToLower(m) != mac {
+			newList = append(newList, m)
+		}
+	}
+	pe.settings.CustomBlacklist = newList
+
+	// 如果属于某个成员，解除该成员的锁定
+	for _, m := range pe.members {
+		for _, dmac := range m.DeviceMACs {
+			if strings.ToLower(dmac) == mac {
+				m.IsLocked = false
+				break
+			}
+		}
+	}
+}
+
+// AssignDeviceToMember 快速将设备分配给指定成员（若 memberID 为空则解绑）
+func (pe *PolicyEngine) AssignDeviceToMember(mac string, memberID string) {
+	pe.mu.Lock()
+	defer pe.mu.Unlock()
+
+	mac = strings.ToLower(strings.TrimSpace(mac))
+	if mac == "" {
+		return
+	}
+
+	// 1. 先从所有现有成员中移除该 MAC，避免重复绑定
+	for _, m := range pe.members {
+		newMACs := make([]string, 0, len(m.DeviceMACs))
+		for _, dmac := range m.DeviceMACs {
+			if strings.ToLower(dmac) != mac {
+				newMACs = append(newMACs, dmac)
+			}
+		}
+		m.DeviceMACs = newMACs
+	}
+
+	// 2. 如果指定了目标 memberID，则加入目标成员
+	if memberID != "" {
+		if target, ok := pe.members[memberID]; ok {
+			target.DeviceMACs = append(target.DeviceMACs, mac)
+		}
+	}
 }
 
 // ParseTimeString 格式化辅助
