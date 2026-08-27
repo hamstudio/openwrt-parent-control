@@ -53,12 +53,14 @@ type Member struct {
 
 // AppInfo 表示一个具体的被识别应用
 type AppInfo struct {
-	ID        int    `json:"id"`
-	Name      string `json:"name"`
-	ClassID   int    `json:"class_id"`
-	ClassName string `json:"class_name"`
-	ClassZh   string `json:"class_zh"`
-	Selected  bool   `json:"selected,omitempty"`
+	ID          int    `json:"id"`
+	Name        string `json:"name"`
+	ClassID     int    `json:"class_id"`
+	ClassName   string `json:"class_name"`
+	ClassZh     string `json:"class_zh"`
+	Description string `json:"description,omitempty"`
+	IsCustom    bool   `json:"is_custom,omitempty"`
+	Selected    bool   `json:"selected,omitempty"`
 }
 
 // AppCategory 应用分类
@@ -67,6 +69,7 @@ type AppCategory struct {
 	ClassName string    `json:"class_name"`
 	ClassZh   string    `json:"class_zh"`
 	Icon      string    `json:"icon"`
+	IsCustom  bool      `json:"is_custom,omitempty"`
 	Apps      []AppInfo `json:"apps"`
 }
 

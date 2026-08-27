@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,6 +21,8 @@ type DPIManager struct {
 	featurePath    string
 	categories     []models.AppCategory
 	appMap         map[int]models.AppInfo
+	customApps     map[int]models.AppInfo
+	customCats     map[int]models.AppCategory
 	blockedAppIDs  map[int]bool
 	managedMACs    map[string]bool
 	isOAFInstalled bool
@@ -34,6 +37,8 @@ func NewDPIManager(featurePath string) *DPIManager {
 		featurePath:   featurePath,
 		categories:    make([]models.AppCategory, 0),
 		appMap:        make(map[int]models.AppInfo),
+		customApps:    make(map[int]models.AppInfo),
+		customCats:    make(map[int]models.AppCategory),
 		blockedAppIDs: make(map[int]bool),
 		managedMACs:   make(map[string]bool),
 	}
@@ -142,6 +147,7 @@ func (m *DPIManager) loadFeatures() {
 					ClassID:   classID,
 					ClassName: className,
 					ClassZh:   classZh,
+					IsCustom:  false,
 				}
 				m.appMap[appID] = app
 				if currentCat != nil {
@@ -163,9 +169,9 @@ func (m *DPIManager) loadFeatures() {
 func getCategoryIcon(className string) string {
 	switch className {
 	case "chat":
-		return "chat"
+		return "message-square"
 	case "game":
-		return "gamepad"
+		return "gamepad-2"
 	case "video":
 		return "play-circle"
 	case "music":
@@ -189,37 +195,45 @@ func (m *DPIManager) loadFallbackFeatures() {
 		ClassID:   2,
 		ClassName: "game",
 		ClassZh:   "游戏",
-		Icon:      "gamepad",
+		Icon:      "gamepad-2",
 		Apps: []models.AppInfo{
 			{ID: 2001, Name: "王者荣耀", ClassID: 2, ClassName: "game", ClassZh: "游戏"},
 			{ID: 2002, Name: "和平精英", ClassID: 2, ClassName: "game", ClassZh: "游戏"},
 			{ID: 2023, Name: "原神", ClassID: 2, ClassName: "game", ClassZh: "游戏"},
 			{ID: 2015, Name: "我的世界", ClassID: 2, ClassName: "game", ClassZh: "游戏"},
 			{ID: 2035, Name: "英雄联盟", ClassID: 2, ClassName: "game", ClassZh: "游戏"},
+			{ID: 2040, Name: "蛋仔派对", ClassID: 2, ClassName: "game", ClassZh: "游戏"},
+			{ID: 2050, Name: "Roblox", ClassID: 2, ClassName: "game", ClassZh: "游戏"},
+			{ID: 2060, Name: "Steam", ClassID: 2, ClassName: "game", ClassZh: "游戏"},
 		},
 	}
 	videoCat := models.AppCategory{
 		ClassID:   3,
 		ClassName: "video",
-		ClassZh:   "视频",
+		ClassZh:   "短视频/影视",
 		Icon:      "play-circle",
 		Apps: []models.AppInfo{
-			{ID: 3001, Name: "抖音", ClassID: 3, ClassName: "video", ClassZh: "视频"},
-			{ID: 3009, Name: "快手", ClassID: 3, ClassName: "video", ClassZh: "视频"},
-			{ID: 3010, Name: "小红书", ClassID: 3, ClassName: "video", ClassZh: "视频"},
-			{ID: 3014, Name: "哔哩哔哩", ClassID: 3, ClassName: "video", ClassZh: "视频"},
-			{ID: 3004, Name: "爱奇艺", ClassID: 3, ClassName: "video", ClassZh: "视频"},
-			{ID: 3003, Name: "腾讯视频", ClassID: 3, ClassName: "video", ClassZh: "视频"},
+			{ID: 3001, Name: "抖音", ClassID: 3, ClassName: "video", ClassZh: "短视频/影视"},
+			{ID: 3009, Name: "快手", ClassID: 3, ClassName: "video", ClassZh: "短视频/影视"},
+			{ID: 3010, Name: "小红书", ClassID: 3, ClassName: "video", ClassZh: "短视频/影视"},
+			{ID: 3014, Name: "哔哩哔哩", ClassID: 3, ClassName: "video", ClassZh: "短视频/影视"},
+			{ID: 3004, Name: "爱奇艺", ClassID: 3, ClassName: "video", ClassZh: "短视频/影视"},
+			{ID: 3003, Name: "腾讯视频", ClassID: 3, ClassName: "video", ClassZh: "短视频/影视"},
+			{ID: 3005, Name: "优酷", ClassID: 3, ClassName: "video", ClassZh: "短视频/影视"},
+			{ID: 3020, Name: "YouTube", ClassID: 3, ClassName: "video", ClassZh: "短视频/影视"},
+			{ID: 3025, Name: "TikTok", ClassID: 3, ClassName: "video", ClassZh: "短视频/影视"},
 		},
 	}
 	chatCat := models.AppCategory{
 		ClassID:   1,
 		ClassName: "chat",
-		ClassZh:   "聊天",
-		Icon:      "chat",
+		ClassZh:   "社交/聊天",
+		Icon:      "message-square",
 		Apps: []models.AppInfo{
-			{ID: 1001, Name: "QQ", ClassID: 1, ClassName: "chat", ClassZh: "聊天"},
-			{ID: 1002, Name: "微信", ClassID: 1, ClassName: "chat", ClassZh: "聊天"},
+			{ID: 1001, Name: "QQ", ClassID: 1, ClassName: "chat", ClassZh: "社交/聊天"},
+			{ID: 1002, Name: "微信", ClassID: 1, ClassName: "chat", ClassZh: "社交/聊天"},
+			{ID: 1005, Name: "微博", ClassID: 1, ClassName: "chat", ClassZh: "社交/聊天"},
+			{ID: 1010, Name: "Discord", ClassID: 1, ClassName: "chat", ClassZh: "社交/聊天"},
 		},
 	}
 
@@ -231,11 +245,295 @@ func (m *DPIManager) loadFallbackFeatures() {
 	}
 }
 
+// LoadCustomData 载入持久化的自定义应用与分类
+func (m *DPIManager) LoadCustomData(apps []models.AppInfo, cats []models.AppCategory) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.customApps = make(map[int]models.AppInfo)
+	m.customCats = make(map[int]models.AppCategory)
+
+	for _, c := range cats {
+		c.IsCustom = true
+		if c.Icon == "" {
+			c.Icon = getCategoryIcon(c.ClassName)
+		}
+		m.customCats[c.ClassID] = c
+	}
+
+	for _, a := range apps {
+		a.IsCustom = true
+		m.customApps[a.ID] = a
+		m.appMap[a.ID] = a
+	}
+
+	m.rebuildCategoriesLocked()
+}
+
+// GetCustomData 获取用户自定义的应用与分类
+func (m *DPIManager) GetCustomData() ([]models.AppInfo, []models.AppCategory) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	apps := make([]models.AppInfo, 0, len(m.customApps))
+	for _, a := range m.customApps {
+		apps = append(apps, a)
+	}
+
+	cats := make([]models.AppCategory, 0, len(m.customCats))
+	for _, c := range m.customCats {
+		cats = append(cats, c)
+	}
+	return apps, cats
+}
+
+// rebuildCategoriesLocked 重构 categories 切片（必须在持锁状态下调用）
+func (m *DPIManager) rebuildCategoriesLocked() {
+	catMap := make(map[int]*models.AppCategory)
+
+	// 1. 先加入已有基础分类
+	for i := range m.categories {
+		cat := m.categories[i]
+		cat.Apps = make([]models.AppInfo, 0)
+		catMap[cat.ClassID] = &cat
+	}
+
+	// 2. 加入自定义分类
+	for _, c := range m.customCats {
+		if _, exists := catMap[c.ClassID]; !exists {
+			cp := c
+			cp.Apps = make([]models.AppInfo, 0)
+			catMap[c.ClassID] = &cp
+		}
+	}
+
+	// 3. 将所有 app 归纳进分类
+	for _, app := range m.appMap {
+		cat, ok := catMap[app.ClassID]
+		if !ok {
+			// 没有找到对应分类，默认放入其他分类
+			otherCat, exists := catMap[99]
+			if !exists {
+				other := models.AppCategory{
+					ClassID:   99,
+					ClassName: "other",
+					ClassZh:   "其他/自定义",
+					Icon:      "grid",
+					Apps:      make([]models.AppInfo, 0),
+				}
+				catMap[99] = &other
+				otherCat = &other
+			}
+			app.ClassID = otherCat.ClassID
+			app.ClassName = otherCat.ClassName
+			app.ClassZh = otherCat.ClassZh
+			cat = otherCat
+		} else {
+			app.ClassName = cat.ClassName
+			app.ClassZh = cat.ClassZh
+		}
+		cat.Apps = append(cat.Apps, app)
+	}
+
+	// 4. 排序分类及分类内的 App
+	result := make([]models.AppCategory, 0, len(catMap))
+	for _, cat := range catMap {
+		sort.Slice(cat.Apps, func(i, j int) bool {
+			return cat.Apps[i].ID < cat.Apps[j].ID
+		})
+		result = append(result, *cat)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].ClassID < result[j].ClassID
+	})
+
+	m.categories = result
+}
+
 // GetCategories 获取所有分类与 App
 func (m *DPIManager) GetCategories() []models.AppCategory {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.categories
+}
+
+// GetAllApps 获取所有 App 的平面列表
+func (m *DPIManager) GetAllApps() []models.AppInfo {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	apps := make([]models.AppInfo, 0, len(m.appMap))
+	for _, a := range m.appMap {
+		apps = append(apps, a)
+	}
+	sort.Slice(apps, func(i, j int) bool {
+		return apps[i].ID < apps[j].ID
+	})
+	return apps
+}
+
+// GetApp 获取指定 App
+func (m *DPIManager) GetApp(id int) (models.AppInfo, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	app, ok := m.appMap[id]
+	return app, ok
+}
+
+// AddApp 新增受限 App
+func (m *DPIManager) AddApp(app models.AppInfo) (models.AppInfo, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if strings.TrimSpace(app.Name) == "" {
+		return app, fmt.Errorf("app name cannot be empty")
+	}
+
+	// 若未指定 ID 或 ID 冲突，自动生成一个自定义 ID (> 5000)
+	if app.ID <= 0 || m.appMap[app.ID].ID != 0 {
+		maxID := 5000
+		for id := range m.appMap {
+			if id >= maxID {
+				maxID = id + 1
+			}
+		}
+		app.ID = maxID
+	}
+
+	// 查找分类名称
+	if app.ClassID <= 0 {
+		app.ClassID = 2 // 默认游戏
+	}
+	for _, cat := range m.categories {
+		if cat.ClassID == app.ClassID {
+			app.ClassName = cat.ClassName
+			app.ClassZh = cat.ClassZh
+			break
+		}
+	}
+	if app.ClassZh == "" {
+		app.ClassZh = "自定义"
+		app.ClassName = "custom"
+	}
+
+	app.IsCustom = true
+	m.appMap[app.ID] = app
+	m.customApps[app.ID] = app
+	m.rebuildCategoriesLocked()
+
+	log.Printf("[DPI] Added custom app: [%d] %s (%s)", app.ID, app.Name, app.ClassZh)
+	return app, nil
+}
+
+// UpdateApp 更新 App 信息
+func (m *DPIManager) UpdateApp(id int, updated models.AppInfo) (models.AppInfo, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	existing, ok := m.appMap[id]
+	if !ok {
+		return updated, fmt.Errorf("app with ID %d not found", id)
+	}
+
+	if strings.TrimSpace(updated.Name) != "" {
+		existing.Name = strings.TrimSpace(updated.Name)
+	}
+	if updated.ClassID > 0 {
+		existing.ClassID = updated.ClassID
+		for _, cat := range m.categories {
+			if cat.ClassID == existing.ClassID {
+				existing.ClassName = cat.ClassName
+				existing.ClassZh = cat.ClassZh
+				break
+			}
+		}
+	}
+	if updated.Description != "" {
+		existing.Description = updated.Description
+	}
+
+	existing.IsCustom = true
+	m.appMap[id] = existing
+	m.customApps[id] = existing
+	m.rebuildCategoriesLocked()
+
+	log.Printf("[DPI] Updated app: [%d] %s (%s)", existing.ID, existing.Name, existing.ClassZh)
+	return existing, nil
+}
+
+// DeleteApp 删除 App
+func (m *DPIManager) DeleteApp(id int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, ok := m.appMap[id]; !ok {
+		return fmt.Errorf("app with ID %d not found", id)
+	}
+
+	delete(m.appMap, id)
+	delete(m.customApps, id)
+	m.rebuildCategoriesLocked()
+
+	log.Printf("[DPI] Deleted app: [%d]", id)
+	return nil
+}
+
+// AddCategory 新增应用分类
+func (m *DPIManager) AddCategory(cat models.AppCategory) (models.AppCategory, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if strings.TrimSpace(cat.ClassZh) == "" {
+		return cat, fmt.Errorf("category Chinese name cannot be empty")
+	}
+
+	if cat.ClassID <= 0 {
+		maxClassID := 10
+		for _, c := range m.categories {
+			if c.ClassID >= maxClassID {
+				maxClassID = c.ClassID + 1
+			}
+		}
+		cat.ClassID = maxClassID
+	}
+
+	if cat.ClassName == "" {
+		cat.ClassName = fmt.Sprintf("cat_%d", cat.ClassID)
+	}
+	if cat.Icon == "" {
+		cat.Icon = getCategoryIcon(cat.ClassName)
+	}
+	cat.IsCustom = true
+	cat.Apps = make([]models.AppInfo, 0)
+
+	m.customCats[cat.ClassID] = cat
+	m.rebuildCategoriesLocked()
+
+	log.Printf("[DPI] Added custom category: [%d] %s", cat.ClassID, cat.ClassZh)
+	return cat, nil
+}
+
+// DeleteCategory 删除分类
+func (m *DPIManager) DeleteCategory(classID int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	delete(m.customCats, classID)
+	// 将属于该分类的 App 归入其他
+	for id, app := range m.appMap {
+		if app.ClassID == classID {
+			app.ClassID = 99
+			app.ClassName = "other"
+			app.ClassZh = "其他/自定义"
+			m.appMap[id] = app
+			if _, isCustom := m.customApps[id]; isCustom {
+				m.customApps[id] = app
+			}
+		}
+	}
+
+	m.rebuildCategoriesLocked()
+	log.Printf("[DPI] Deleted category: [%d]", classID)
+	return nil
 }
 
 // ApplyRules 应用封禁应用 ID 列表与受管 MAC 列表至内核

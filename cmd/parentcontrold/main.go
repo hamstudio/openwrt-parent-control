@@ -32,6 +32,9 @@ func main() {
 
 	// 2. 初始化 DPI 引擎
 	dpiMgr := dpi.NewDPIManager(*featurePath)
+	if len(cfgStore.Data.CustomApps) > 0 || len(cfgStore.Data.CustomCategories) > 0 {
+		dpiMgr.LoadCustomData(cfgStore.Data.CustomApps, cfgStore.Data.CustomCategories)
+	}
 
 	// 3. 初始化防火墙管理器
 	fwMgr := firewall.NewFirewallManager()

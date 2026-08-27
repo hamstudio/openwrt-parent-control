@@ -11,8 +11,10 @@ import (
 )
 
 type AppConfig struct {
-	Settings models.GlobalSettings `json:"settings"`
-	Members  []models.Member       `json:"members"`
+	Settings         models.GlobalSettings `json:"settings"`
+	Members          []models.Member       `json:"members"`
+	CustomApps       []models.AppInfo      `json:"custom_apps,omitempty"`
+	CustomCategories []models.AppCategory  `json:"custom_categories,omitempty"`
 }
 
 type ConfigStore struct {
@@ -38,7 +40,9 @@ func NewConfigStore(filePath string) *ConfigStore {
 				CustomBlacklist:   []string{},
 				CustomWhitelist:   []string{},
 			},
-			Members: []models.Member{},
+			Members:          []models.Member{},
+			CustomApps:       []models.AppInfo{},
+			CustomCategories: []models.AppCategory{},
 		},
 	}
 	store.Load()

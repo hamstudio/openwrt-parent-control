@@ -22,9 +22,9 @@ return view.extend({
 								'class': 'btn cbi-button cbi-button-apply',
 								'href': dashboardUrl,
 								'target': '_blank',
-								'style': 'background-color: #4f46e5; color: white; padding: 8px 16px; border-radius: 8px; text-decoration: none; display: inline-block; font-weight: bold;'
+								'style': 'background-color: #059669; color: white; padding: 8px 16px; border-radius: 8px; text-decoration: none; display: inline-block; font-weight: bold;'
 							}, [
-								_('🚀 打开现代响应式控制台 (端口: 8088)')
+								_('🌿 打开绿色健康守护控制台 (端口: 8088)')
 							]),
 							E('div', { 'class': 'cbi-value-description' }, _('点击可在新标签页中打开适配手机与电脑端的家长控制中心，支持一键断网、时间配额滑块及数百款热门 App 精准封禁。'))
 						])
