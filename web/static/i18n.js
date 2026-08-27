@@ -628,33 +628,211 @@ const I18N_LOCALES = {
 
 let currentLocale = 'zh-CN';
 
-function getLocale() {
-  const saved = localStorage.getItem('parentcontrol_lang');
-  if (saved && I18N_LOCALES[saved]) return saved;
-  const nav = navigator.language;
-  if (nav.startsWith('zh-TW') || nav.startsWith('zh-HK')) return 'zh-TW';
-  if (nav.startsWith('zh')) return 'zh-CN';
-  if (nav.startsWith('ja')) return 'ja-JP';
-  if (nav.startsWith('ko')) return 'ko-KR';
-  if (nav.startsWith('de')) return 'de-DE';
-  if (nav.startsWith('fr')) return 'fr-FR';
-  if (nav.startsWith('es')) return 'es-ES';
-  return 'en-US';
+// DPI 特征库分类国际化字典
+const DPI_CATEGORY_I18N = {
+  game: {
+    'zh-CN': '游戏竞技',
+    'en-US': 'Gaming & Esports',
+    'zh-TW': '遊戲競技',
+    'ja-JP': 'ゲーム・eスポーツ',
+    'ko-KR': '게임 및 e스포츠',
+    'de-DE': 'Spiele & eSport',
+    'fr-FR': 'Jeux & eSport',
+    'es-ES': 'Juegos y eSports',
+  },
+  video: {
+    'zh-CN': '视频/直播',
+    'en-US': 'Video & Streaming',
+    'zh-TW': '影片/直播',
+    'ja-JP': '動画・ライブ配信',
+    'ko-KR': '비디오 및 스트리밍',
+    'de-DE': 'Video & Streaming',
+    'fr-FR': 'Vidéo & Streaming',
+    'es-ES': 'Vídeo y Streaming',
+  },
+  chat: {
+    'zh-CN': '社交/聊天',
+    'en-US': 'Social & Messaging',
+    'zh-TW': '社群/通訊',
+    'ja-JP': 'SNS・チャット',
+    'ko-KR': 'SNS 및 메신저',
+    'de-DE': 'Soziale Medien & Chat',
+    'fr-FR': 'Réseaux sociaux & Chat',
+    'es-ES': 'Redes sociales y Chat',
+  },
+  music: {
+    'zh-CN': '音乐音频',
+    'en-US': 'Music & Audio',
+    'zh-TW': '音樂音訊',
+    'ja-JP': '音楽・オーディオ',
+    'ko-KR': '음악 및 오디오',
+    'de-DE': 'Musik & Audio',
+    'fr-FR': 'Musique & Audio',
+    'es-ES': 'Música y Audio',
+  },
+  download: {
+    'zh-CN': '下载与 P2P',
+    'en-US': 'Downloads & P2P',
+    'zh-TW': '下載與 P2P',
+    'ja-JP': 'ダウンロード・P2P',
+    'ko-KR': '다운로드 및 P2P',
+    'de-DE': 'Downloads & P2P',
+    'fr-FR': 'Téléchargements & P2P',
+    'es-ES': 'Descargas y P2P',
+  },
+  shopping: {
+    'zh-CN': '网上购物',
+    'en-US': 'Shopping',
+    'zh-TW': '線上購物',
+    'ja-JP': 'ショッピング',
+    'ko-KR': '온라인 쇼핑',
+    'de-DE': 'Online-Shopping',
+    'fr-FR': 'Achats en ligne',
+    'es-ES': 'Compras online',
+  },
+  education: {
+    'zh-CN': '在线教育',
+    'en-US': 'Education & Learning',
+    'zh-TW': '線上教育',
+    'ja-JP': '教育・学習',
+    'ko-KR': '교육 및 학습',
+    'de-DE': 'Bildung & Lernen',
+    'fr-FR': 'Éducation & Apprentissage',
+    'es-ES': 'Educación y Aprendizaje',
+  },
+  tools: {
+    'zh-CN': '实用工具',
+    'en-US': 'Utilities & Tools',
+    'zh-TW': '實用工具',
+    'ja-JP': 'ユーティリティ',
+    'ko-KR': '유틸리티',
+    'de-DE': 'Dienstprogramme',
+    'fr-FR': 'Utilitaires',
+    'es-ES': 'Herramientas',
+  }
+};
+
+// 常见热门 DPI 应用多语言映射表
+const DPI_APP_I18N = {
+  '王者荣耀': {
+    'en-US': 'Honor of Kings (王者荣耀)',
+    'zh-TW': '王者榮耀 / 傳說對決',
+    'ja-JP': '伝説対決 - Arena of Valor',
+    'ko-KR': '아너 오브 킹즈 (왕자영요)',
+    'de-DE': 'Honor of Kings',
+    'fr-FR': 'Honor of Kings',
+    'es-ES': 'Honor of Kings',
+  },
+  '和平精英': {
+    'en-US': 'PUBG Mobile / Peace Elite',
+    'zh-TW': '和平精英 / 絕地求生 M',
+    'ja-JP': 'PUBG MOBILE / 和平精英',
+    'ko-KR': '배틀그라운드 모바일',
+    'de-DE': 'PUBG Mobile',
+    'fr-FR': 'PUBG Mobile',
+    'es-ES': 'PUBG Mobile',
+  },
+  '原神': {
+    'en-US': 'Genshin Impact (原神)',
+    'zh-TW': '原神 (Genshin Impact)',
+    'ja-JP': '原神 (Genshin Impact)',
+    'ko-KR': '원신 (Genshin Impact)',
+    'de-DE': 'Genshin Impact',
+    'fr-FR': 'Genshin Impact',
+    'es-ES': 'Genshin Impact',
+  },
+  '抖音': {
+    'en-US': 'TikTok / Douyin',
+    'zh-TW': 'TikTok / 抖音',
+    'ja-JP': 'TikTok / 抖音',
+    'ko-KR': '틱톡 / 더우인 (TikTok)',
+    'de-DE': 'TikTok / Douyin',
+    'fr-FR': 'TikTok / Douyin',
+    'es-ES': 'TikTok / Douyin',
+  },
+  '快手': {
+    'en-US': 'Kwai / Kuaishou',
+    'zh-TW': 'Kwai / 快手',
+    'ja-JP': 'Kwai (クアイ)',
+    'ko-KR': '콰이 (Kwai)',
+    'de-DE': 'Kwai / Kuaishou',
+    'fr-FR': 'Kwai / Kuaishou',
+    'es-ES': 'Kwai / Kuaishou',
+  },
+  '哔哩哔哩': {
+    'en-US': 'Bilibili (哔哩哔哩)',
+    'zh-TW': '嗶哩嗶哩 (Bilibili)',
+    'ja-JP': 'ビリビリ (bilibili)',
+    'ko-KR': '빌리빌리 (Bilibili)',
+    'de-DE': 'Bilibili',
+    'fr-FR': 'Bilibili',
+    'es-ES': 'Bilibili',
+  },
+  '微信': {
+    'en-US': 'WeChat (微信)',
+    'zh-TW': 'WeChat / 微信',
+    'ja-JP': 'WeChat (微信)',
+    'ko-KR': '위챗 (WeChat)',
+    'de-DE': 'WeChat',
+    'fr-FR': 'WeChat',
+    'es-ES': 'WeChat',
+  },
+  '淘宝': {
+    'en-US': 'Taobao',
+    'zh-TW': '淘寶',
+    'ja-JP': 'タオバオ (Taobao)',
+    'ko-KR': '타오바오 (Taobao)',
+    'de-DE': 'Taobao',
+    'fr-FR': 'Taobao',
+    'es-ES': 'Taobao',
+  },
+  '京东': {
+    'en-US': 'JD.com',
+    'zh-TW': '京東',
+    'ja-JP': 'ジンドン (JD.com)',
+    'ko-KR': '징둥 (JD.com)',
+    'de-DE': 'JD.com',
+    'fr-FR': 'JD.com',
+    'es-ES': 'JD.com',
+  },
+  '网易云音乐': {
+    'en-US': 'NetEase Cloud Music',
+    'zh-TW': '網易雲音樂',
+    'ja-JP': 'NetEase Cloud Music',
+    'ko-KR': '넷이즈 클라우드 뮤직',
+    'de-DE': 'NetEase Cloud Music',
+    'fr-FR': 'NetEase Cloud Music',
+    'es-ES': 'NetEase Cloud Music',
+  },
+  'QQ音乐': {
+    'en-US': 'QQ Music',
+    'zh-TW': 'QQ 音樂',
+    'ja-JP': 'QQ Music',
+    'ko-KR': 'QQ 뮤직',
+    'de-DE': 'QQ Music',
+    'fr-FR': 'QQ Music',
+    'es-ES': 'QQ Music',
+  }
+};
+
+function tDpiCategory(name, keyOrId = '') {
+  const normKey = (keyOrId || '').toLowerCase();
+  for (const [k, translations] of Object.entries(DPI_CATEGORY_I18N)) {
+    if (normKey === k || normKey.includes(k) || name === translations['zh-CN'] || name.toLowerCase().includes(k)) {
+      return translations[currentLocale] || translations['en-US'] || name;
+    }
+  }
+  return name;
 }
 
-function setLocale(lang) {
-  if (I18N_LOCALES[lang]) {
-    currentLocale = lang;
-    localStorage.setItem('parentcontrol_lang', lang);
-    applyI18n();
+function tDpiApp(name, id = '') {
+  if (DPI_APP_I18N[name]) {
+    return DPI_APP_I18N[name][currentLocale] || DPI_APP_I18N[name]['en-US'] || name;
   }
-}
-
-function t(key, params = {}) {
-  const dict = I18N_LOCALES[currentLocale] || I18N_LOCALES['zh-CN'];
-  let text = dict[key] || I18N_LOCALES['en-US'][key] || key;
-  for (const [k, v] of Object.entries(params)) {
-    text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), v);
+  for (const [appKey, translations] of Object.entries(DPI_APP_I18N)) {
+    if (name.includes(appKey)) {
+      return translations[currentLocale] || translations['en-US'] || name;
+    }
   }
-  return text;
+  return name;
 }

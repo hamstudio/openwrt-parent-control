@@ -570,21 +570,28 @@ function renderAppManagement(keyword = '') {
     const kw = keyword.toLowerCase();
 
     container.innerHTML = appState.categories.map(cat => {
-        const filteredApps = cat.apps.filter(app => !kw || app.name.toLowerCase().includes(kw));
+        const catTitle = tDpiCategory(cat.class_zh, cat.class_name);
+        const filteredApps = cat.apps.filter(app => {
+            const localizedAppName = tDpiApp(app.name, app.id).toLowerCase();
+            return !kw || app.name.toLowerCase().includes(kw) || localizedAppName.includes(kw);
+        });
         if (kw && filteredApps.length === 0) return '';
 
-        const appsHTML = filteredApps.map(app => `
-            <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700/60 hover:border-emerald-500 transition">
-                <div class="flex items-center space-x-2">
-                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                    <span class="font-medium text-xs text-slate-800 dark:text-slate-100">${app.name}</span>
-                    <span class="text-[10px] text-slate-400 font-mono">#${app.id}</span>
+        const appsHTML = filteredApps.map(app => {
+            const appDisplayName = tDpiApp(app.name, app.id);
+            return `
+                <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700/60 hover:border-emerald-500 transition">
+                    <div class="flex items-center space-x-2 truncate">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0"></span>
+                        <span class="font-medium text-xs text-slate-800 dark:text-slate-100 truncate">${appDisplayName}</span>
+                        <span class="text-[10px] text-slate-400 font-mono flex-shrink-0">#${app.id}</span>
+                    </div>
+                    <button onclick="deleteApp(${app.id})" class="text-slate-400 hover:text-rose-500 transition ml-1" title="删除该应用特征">
+                        <i data-lucide="trash" class="w-3.5 h-3.5"></i>
+                    </button>
                 </div>
-                <button onclick="deleteApp(${app.id})" class="text-slate-400 hover:text-rose-500 transition" title="删除该应用特征">
-                    <i data-lucide="trash" class="w-3.5 h-3.5"></i>
-                </button>
-            </div>
-        `).join('');
+            `;
+        }).join('');
 
         return `
             <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
@@ -593,13 +600,13 @@ function renderAppManagement(keyword = '') {
                         <div class="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center">
                             <i data-lucide="${cat.icon || 'grid'}" class="w-4 h-4"></i>
                         </div>
-                        <h4 class="font-bold text-sm text-slate-800 dark:text-white">${cat.class_zh}</h4>
-                        <span class="text-xs text-slate-400 font-mono">(${filteredApps.length} 款)</span>
+                        <h4 class="font-bold text-sm text-slate-800 dark:text-white">${catTitle}</h4>
+                        <span class="text-xs text-slate-400 font-mono">(${filteredApps.length})</span>
                     </div>
                     <div class="flex items-center space-x-2">
                         <button onclick="openAppModal(${cat.class_id})" class="text-xs text-emerald-600 hover:text-emerald-700 font-semibold flex items-center space-x-1">
                             <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-                            <span>添加应用</span>
+                            <span>${t('btnAddApp')}</span>
                         </button>
                     </div>
                 </div>
@@ -623,7 +630,7 @@ function openAppModal(classId = null) {
     const modal = document.getElementById('appModal');
     const select = document.getElementById('formAppCategory');
     select.innerHTML = appState.categories.map(c => `
-        <option value="${c.class_id}" ${classId === c.class_id ? 'selected' : ''}>${c.class_zh}</option>
+        <option value="${c.class_id}" ${classId === c.class_id ? 'selected' : ''}>${tDpiCategory(c.class_zh, c.class_name)}</option>
     `).join('');
 
     document.getElementById('formAppId').value = '';
@@ -828,12 +835,14 @@ function renderModalAppCategories(selectedAppIDs = []) {
     }
 
     container.innerHTML = appState.categories.map(cat => {
+        const catTitle = tDpiCategory(cat.class_zh, cat.class_name);
         const appsHTML = cat.apps.map(app => {
             const isChecked = selectedSet.has(app.id);
+            const appDisplayName = tDpiApp(app.name, app.id);
             return `
                 <label class="inline-flex items-center space-x-1.5 bg-white dark:bg-slate-800 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer text-xs">
                     <input type="checkbox" name="modalApp" value="${app.id}" ${isChecked ? 'checked' : ''} onchange="updateSelectedCount()" class="w-3.5 h-3.5 text-emerald-600 rounded">
-                    <span>${app.name}</span>
+                    <span>${appDisplayName}</span>
                 </label>
             `;
         }).join('');
@@ -842,7 +851,7 @@ function renderModalAppCategories(selectedAppIDs = []) {
             <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 bg-slate-50/50 dark:bg-slate-900/30">
                 <div class="flex items-center justify-between mb-2">
                     <span class="font-bold text-xs text-slate-700 dark:text-slate-200 flex items-center space-x-1">
-                        <span>${cat.class_zh}</span>
+                        <span>${catTitle}</span>
                     </span>
                     <button type="button" onclick="toggleSelectAllCategory(${cat.class_id})" class="text-[11px] text-emerald-600 hover:underline">全选/反选</button>
                 </div>
