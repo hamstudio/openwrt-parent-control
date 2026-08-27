@@ -10,6 +10,7 @@ bin/
 *.out
 *.test
 .build/
+.wrangler/
 
 # IDE and OS
 .DS_Store
