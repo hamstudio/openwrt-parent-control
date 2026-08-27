@@ -112,15 +112,15 @@ async function submitPinVerification() {
         if (res.ok && data.success) {
             setStoredPin(enteredPin);
             closePinLockModal();
-            showToast('身份验证成功', 'success');
+            showToast(t('toastAuthSuccess'), 'success');
             await Promise.all([fetchStatus(), fetchMembers(), fetchDevices(), fetchCategories(), fetchSettings()]);
             lucide.createIcons();
         } else {
-            showToast('密码错误，请重新输入', 'error');
+            showToast(t('toastPinError'), 'error');
             clearPinKey();
         }
     } catch (e) {
-        showToast('验证请求失败', 'error');
+        showToast(t('toastAuthFailed'), 'error');
         clearPinKey();
     }
 }
@@ -335,7 +335,7 @@ async function fetchStatus() {
 
         const latencyBadge = document.getElementById('latencyBadge');
         if (latencyBadge) {
-            latencyBadge.innerText = `直连 ${latency}ms`;
+            latencyBadge.innerText = t('directConnect', { ms: latency });
         }
 
         const lockConsoleBtn = document.getElementById('lockConsoleBtn');
@@ -343,28 +343,28 @@ async function fetchStatus() {
         if (data.pin_required) {
             if (lockConsoleBtn) lockConsoleBtn.classList.remove('hidden');
             if (pinProtectionBadge) {
-                pinProtectionBadge.innerHTML = '<i data-lucide="lock" class="w-4 h-4 text-emerald-500"></i><span class="text-emerald-600 dark:text-emerald-400">4位密码已保护</span>';
+                pinProtectionBadge.innerHTML = '<i data-lucide="lock" class="w-4 h-4 text-emerald-500"></i><span class="text-emerald-600 dark:text-emerald-400">' + t('pinProtected') + '</span>';
             }
         } else {
             if (lockConsoleBtn) lockConsoleBtn.classList.add('hidden');
             if (pinProtectionBadge) {
-                pinProtectionBadge.innerHTML = '<i data-lucide="unlock" class="w-4 h-4 text-slate-400"></i><span>未设密码锁</span>';
+                pinProtectionBadge.innerHTML = '<i data-lucide="unlock" class="w-4 h-4 text-slate-400"></i><span>' + t('pinUnprotected') + '</span>';
             }
         }
 
         const badge = document.getElementById('kernelStatusBadge');
         if (data.kernel_dpi_ready) {
             badge.className = 'hidden md:flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800';
-            badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span><span>kmod-oaf DPI 引擎运行中</span>';
+            badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span><span>' + t('dpiRunning') + '</span>';
         } else {
             badge.className = 'hidden md:flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-200 dark:border-amber-800';
-            badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-500"></span><span>kmod-oaf 未加载 (规则降级)</span>';
+            badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-500"></span><span>' + t('dpiFallback') + '</span>';
         }
     } catch (e) {
         console.error('Fetch status failed:', e);
         const latencyBadge = document.getElementById('latencyBadge');
         if (latencyBadge) {
-            latencyBadge.innerText = `离线`;
+            latencyBadge.innerText = t('offline');
             latencyBadge.className = 'text-[10px] px-1.5 py-0.5 rounded-md font-mono bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400';
         }
     }
@@ -470,7 +470,7 @@ function renderMembers() {
                             ${(m.schedule && m.schedule.enabled && m.schedule.time_ranges && m.schedule.time_ranges.length > 0) ? `
                                 <p class="text-[11px] text-amber-600 dark:text-amber-400 font-medium mt-1 flex items-center space-x-1">
                                     <i data-lucide="clock" class="w-3 h-3"></i>
-                                    <span>禁网: ${m.schedule.time_ranges.map(tr => tr.start_time + '-' + tr.end_time).join(', ')}</span>
+                                    <span>${t('blockSchedulePrefix')}: ${m.schedule.time_ranges.map(tr => tr.start_time + '-' + tr.end_time).join(', ')}</span>
                                 </p>
                             ` : ''}
                         </div>
@@ -516,7 +516,7 @@ function renderMembers() {
 function renderDevices(filterKeyword = '') {
     const tbody = document.getElementById('devicesTableBody');
     if (!appState.devices || appState.devices.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-400">未发现局域网设备</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-400">' + t('noDevices') + '</td></tr>';
         return;
     }
 
@@ -530,7 +530,7 @@ function renderDevices(filterKeyword = '') {
     });
 
     if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-400">无匹配设备</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-400">' + t('noMatchingDevices') + '</td></tr>';
         return;
     }
 
@@ -596,7 +596,7 @@ function renderAppManagement(keyword = '') {
     if (!container) return;
 
     if (!appState.categories || appState.categories.length === 0) {
-        container.innerHTML = '<div class="text-center py-12 text-slate-400">特征库加载中...</div>';
+        container.innerHTML = '<div class="text-center py-12 text-slate-400">' + t('loadingDpi') + '</div>';
         return;
     }
 
@@ -619,7 +619,7 @@ function renderAppManagement(keyword = '') {
                         <span class="font-medium text-xs text-slate-800 dark:text-slate-100 truncate">${appDisplayName}</span>
                         <span class="text-[10px] text-slate-400 font-mono flex-shrink-0">#${app.id}</span>
                     </div>
-                    <button onclick="deleteApp(${app.id})" class="text-slate-400 hover:text-rose-500 transition ml-1" title="删除该应用特征">
+                    <button onclick="deleteApp(${app.id})" class="text-slate-400 hover:text-rose-500 transition ml-1" title="Delete">
                         <i data-lucide="trash" class="w-3.5 h-3.5"></i>
                     </button>
                 </div>
@@ -681,7 +681,7 @@ async function saveAppForm() {
     const name = document.getElementById('formAppName').value.trim();
     const classId = parseInt(document.getElementById('formAppCategory').value);
     if (!name) {
-        showToast('请输入应用名称！', 'warning');
+        showToast(t('toastInputAppName'), 'warning');
         return;
     }
 
@@ -698,30 +698,30 @@ async function saveAppForm() {
         });
         if (res.ok) {
             closeAppModal();
-            showToast('新应用特征已成功添加！', 'success');
+            showToast(t('toastAppAdded'), 'success');
             await fetchCategories();
             renderAppManagement();
         } else {
-            showToast('添加失败', 'error');
+            showToast(t('toastFailed'), 'error');
         }
     } catch (e) {
-        showToast('请求失败', 'error');
+        showToast(t('toastNetworkError'), 'error');
     }
 }
 
 async function deleteApp(appId) {
-    if (!confirm('确定要删除该应用特征吗？')) return;
+    if (!confirm(t('confirmDeleteApp'))) return;
     try {
         const res = await authFetch(`/api/apps/${appId}`, { method: 'DELETE' });
         if (res.ok) {
-            showToast('应用特征已删除', 'info');
+            showToast(t('toastAppDeleted'), 'info');
             await fetchCategories();
             renderAppManagement();
         } else {
-            showToast('删除失败', 'error');
+            showToast(t('toastFailed'), 'error');
         }
     } catch (e) {
-        showToast('请求失败', 'error');
+        showToast(t('toastNetworkError'), 'error');
     }
 }
 
@@ -739,7 +739,7 @@ async function saveCategoryForm() {
     const name = document.getElementById('formCategoryName').value.trim();
     const icon = document.getElementById('formCategoryIcon').value;
     if (!name) {
-        showToast('请输入分类名称！', 'warning');
+        showToast(t('toastInputCategoryName'), 'warning');
         return;
     }
 
@@ -756,14 +756,14 @@ async function saveCategoryForm() {
         });
         if (res.ok) {
             closeCategoryModal();
-            showToast('新分类已创建！', 'success');
+            showToast(t('toastCategoryCreated'), 'success');
             await fetchCategories();
             renderAppManagement();
         } else {
-            showToast('创建分类失败', 'error');
+            showToast(t('toastFailed'), 'error');
         }
     } catch (e) {
-        showToast('请求失败', 'error');
+        showToast(t('toastNetworkError'), 'error');
     }
 }
 
@@ -787,14 +787,14 @@ async function applyBonusTime(minutes) {
     try {
         const res = await authFetch(`/api/members/${id}/bonus?minutes=${minutes}`, { method: 'POST' });
         if (res.ok) {
-            showToast(`已成功奖励 ${minutes} 分钟上网时间！`, 'success');
+            showToast(t('toastBonusGranted', { min: minutes }), 'success');
             await fetchMembers();
             lucide.createIcons();
         } else {
-            showToast('加时失败', 'error');
+            showToast(t('toastFailed'), 'error');
         }
     } catch (e) {
-        showToast('网络请求失败', 'error');
+        showToast(t('toastNetworkError'), 'error');
     }
 }
 
@@ -822,12 +822,12 @@ function addTimeRangeRow(startTime = '21:30', endTime = '07:00') {
     row.className = 'time-range-row flex items-center space-x-2 bg-white dark:bg-slate-800 p-2 rounded-xl border border-slate-200 dark:border-slate-700';
     row.innerHTML = `
         <div class="flex items-center space-x-1.5 flex-1">
-            <span class="text-xs text-slate-400">禁网</span>
+            <span class="text-xs text-slate-400">${t('timeRangeBlock')}</span>
             <input type="time" class="time-range-start px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono" value="${startTime}">
-            <span class="text-slate-400 text-xs">至</span>
+            <span class="text-slate-400 text-xs">${t('timeRangeTo')}</span>
             <input type="time" class="time-range-end px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono" value="${endTime}">
         </div>
-        <button type="button" onclick="removeTimeRangeRow(this)" class="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition" title="删除时间段">
+        <button type="button" onclick="removeTimeRangeRow(this)" class="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition" title="Delete">
             <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
         </button>
     `;
@@ -851,7 +851,7 @@ function openMemberModal(member = null) {
     if (timeRangeContainer) timeRangeContainer.innerHTML = '';
 
     if (member) {
-        title.innerText = '编辑成员规则 - ' + member.name;
+        title.innerText = t('editMemberTitle', { name: member.name });
         document.getElementById('formMemberId').value = member.id;
         document.getElementById('formMemberName').value = member.name;
         document.getElementById('formMemberAvatar').value = member.avatar || 'boy';
@@ -878,7 +878,7 @@ function openMemberModal(member = null) {
 
         btnDel.classList.remove('hidden');
     } else {
-        title.innerText = '添加受管家庭成员';
+        title.innerText = t('addMemberTitle');
         document.getElementById('formMemberId').value = '';
         document.getElementById('formMemberName').value = '';
         document.getElementById('formMemberAvatar').value = 'boy';
@@ -905,7 +905,7 @@ function closeMemberModal() {
 function renderModalDevices(selectedMACs = []) {
     const container = document.getElementById('modalDeviceList');
     if (!appState.devices || appState.devices.length === 0) {
-        container.innerHTML = '<div class="text-xs text-slate-400 p-2">未探测到局域网设备</div>';
+        container.innerHTML = '<div class="text-xs text-slate-400 p-2">' + t('noDevicesDetected') + '</div>';
         return;
     }
 
@@ -928,7 +928,7 @@ function renderModalAppCategories(selectedAppIDs = []) {
     const selectedSet = new Set(selectedAppIDs || []);
 
     if (!appState.categories || appState.categories.length === 0) {
-        container.innerHTML = '<div class="text-xs text-slate-400 p-2">加载特征库中...</div>';
+        container.innerHTML = '<div class="text-xs text-slate-400 p-2">' + t('loadingDpi') + '</div>';
         return;
     }
 
@@ -951,7 +951,7 @@ function renderModalAppCategories(selectedAppIDs = []) {
                     <span class="font-bold text-xs text-slate-700 dark:text-slate-200 flex items-center space-x-1">
                         <span>${catTitle}</span>
                     </span>
-                    <button type="button" onclick="toggleSelectAllCategory(${cat.class_id})" class="text-[11px] text-emerald-600 hover:underline">全选/反选</button>
+                    <button type="button" onclick="toggleSelectAllCategory(${cat.class_id})" class="text-[11px] text-emerald-600 hover:underline">${t('btnToggleSelect')}</button>
                 </div>
                 <div class="flex flex-wrap gap-1.5" data-cat-id="${cat.class_id}">
                     ${appsHTML}
@@ -987,10 +987,10 @@ async function toggleDeviceLock(mac, currentlyLocked) {
             await Promise.all([fetchStatus(), fetchMembers(), fetchDevices()]);
             lucide.createIcons();
         } else {
-            showToast('操作失败', 'error');
+            showToast(t('toastFailed'), 'error');
         }
     } catch (e) {
-        showToast('请求网络失败', 'error');
+        showToast(t('toastNetworkError'), 'error');
     }
 }
 
@@ -1011,7 +1011,7 @@ function openAssignModal(mac, deviceName, currentMemberId) {
                 </div>
                 <div>
                     <div class="font-bold text-xs text-slate-800 dark:text-slate-100">${t('unassigned')}</div>
-                    <div class="text-[11px] text-slate-400">解除该设备的成员绑定</div>
+                    <div class="text-[11px] text-slate-400">${t('unbindDeviceDesc')}</div>
                 </div>
             </div>
         </label>
@@ -1031,7 +1031,7 @@ function openAssignModal(mac, deviceName, currentMemberId) {
                         </div>
                         <div>
                             <div class="font-bold text-xs text-slate-800 dark:text-slate-100">${m.name}</div>
-                            <div class="text-[11px] text-slate-400">已绑定 ${devCount} 台设备 · 每日配额 ${m.quota_minutes || 0} 分钟</div>
+                            <div class="text-[11px] text-slate-400">${t('statDevices')}: ${devCount} · ${t('todayUsed')}: ${m.quota_minutes || 0} min</div>
                         </div>
                     </div>
                 </label>
@@ -1073,14 +1073,14 @@ async function submitDeviceAssign() {
         });
         if (res.ok) {
             closeAssignModal();
-            showToast('设备归属成员已成功更新！', 'success');
+            showToast(t('toastDeviceAssigned'), 'success');
             await Promise.all([fetchMembers(), fetchDevices()]);
             lucide.createIcons();
         } else {
-            showToast('分配成员失败', 'error');
+            showToast(t('toastFailed'), 'error');
         }
     } catch (e) {
-        showToast('请求网络失败', 'error');
+        showToast(t('toastNetworkError'), 'error');
     }
 }
 
@@ -1099,7 +1099,7 @@ async function saveMemberForm() {
     const id = document.getElementById('formMemberId').value || 'm_' + Date.now();
     const name = document.getElementById('formMemberName').value.trim();
     if (!name) {
-        showToast('请输入成员姓名！', 'warning');
+        showToast(t('toastInputMemberName'), 'warning');
         return;
     }
 
@@ -1147,29 +1147,29 @@ async function saveMemberForm() {
         });
         if (res.ok) {
             closeMemberModal();
-            showToast('规则已成功保存并立即生效！', 'success');
+            showToast(t('toastRuleSaved'), 'success');
             await fetchMembers();
             lucide.createIcons();
         } else {
-            showToast('保存失败，请检查参数', 'error');
+            showToast(t('toastFailed'), 'error');
         }
     } catch (e) {
-        showToast('网络请求失败', 'error');
+        showToast(t('toastNetworkError'), 'error');
     }
 }
 
 async function deleteCurrentMember() {
     const id = document.getElementById('formMemberId').value;
-    if (!id || !confirm('确定要删除该受管成员吗？')) return;
+    if (!id || !confirm(t('confirmDeleteMember'))) return;
 
     try {
         await authFetch(`/api/members/${id}`, { method: 'DELETE' });
         closeMemberModal();
-        showToast('受管成员已删除', 'info');
+        showToast(t('toastMemberDeleted'), 'info');
         await fetchMembers();
         lucide.createIcons();
     } catch (e) {
-        showToast('删除失败', 'error');
+        showToast(t('toastFailed'), 'error');
     }
 }
 
@@ -1177,12 +1177,12 @@ async function lockMember(id) {
     try {
         const res = await authFetch(`/api/members/${id}/lock`, { method: 'POST' });
         if (res.ok) {
-            showToast('已切断该成员的网络连接', 'warning');
+            showToast(t('toastLocked'), 'warning');
             await fetchMembers();
             lucide.createIcons();
         }
     } catch (e) {
-        showToast('操作失败', 'error');
+        showToast(t('toastFailed'), 'error');
     }
 }
 
@@ -1190,12 +1190,12 @@ async function unlockMember(id) {
     try {
         const res = await authFetch(`/api/members/${id}/unlock`, { method: 'POST' });
         if (res.ok) {
-            showToast('已恢复正常上网', 'success');
+            showToast(t('toastUnlocked'), 'success');
             await fetchMembers();
             lucide.createIcons();
         }
     } catch (e) {
-        showToast('操作失败', 'error');
+        showToast(t('toastFailed'), 'error');
     }
 }
 
@@ -1206,7 +1206,7 @@ function clearPinSetting() {
 async function saveGlobalSettings() {
     const pinVal = document.getElementById('settingPinCode').value.trim();
     if (pinVal && (!/^\d{4}$/.test(pinVal))) {
-        showToast('密码必须为 4 位数字！', 'warning');
+        showToast(t('toastPinLengthError'), 'warning');
         return;
     }
 
@@ -1233,10 +1233,10 @@ async function saveGlobalSettings() {
             } else {
                 setStoredPin('');
             }
-            showToast('全局安全设置已成功下发并生效！', 'success');
+            showToast(t('toastSettingsSaved'), 'success');
             await fetchStatus();
         }
     } catch (e) {
-        showToast('保存设置失败', 'error');
+        showToast(t('toastFailed'), 'error');
     }
 }
