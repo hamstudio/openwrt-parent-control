@@ -178,6 +178,10 @@
             <div class="flex space-x-2 overflow-x-auto">
                 <button onclick="switchTab('members')" id="tabBtnMembers" class="px-4 py-2 text-sm font-semibold rounded-xl bg-emerald-600 text-white shadow-sm transition whitespace-nowrap" data-i18n="tabMembers">Family Members</button>
                 <button onclick="switchTab('devices')" id="tabBtnDevices" class="px-4 py-2 text-sm font-semibold rounded-xl text-slate-600 dark:text-slate-300 hover:bg-emerald-50 dark:hover:bg-slate-800 transition whitespace-nowrap" data-i18n="tabDevices">LAN Devices</button>
+                <button onclick="switchTab('stats')" id="tabBtnStats" class="px-4 py-2 text-sm font-semibold rounded-xl text-slate-600 dark:text-slate-300 hover:bg-emerald-50 dark:hover:bg-slate-800 transition whitespace-nowrap flex items-center space-x-1.5">
+                    <i data-lucide="bar-chart-3" class="w-4 h-4 text-emerald-500"></i>
+                    <span data-i18n="tabStats">Usage Reports</span>
+                </button>
                 <button onclick="switchTab('apps')" id="tabBtnApps" class="px-4 py-2 text-sm font-semibold rounded-xl text-slate-600 dark:text-slate-300 hover:bg-emerald-50 dark:hover:bg-slate-800 transition whitespace-nowrap flex items-center space-x-1.5">
                     <span data-i18n="tabApps">App Signatures (DPI)</span>
                     <span id="tabAppCountBadge" class="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-200 dark:bg-slate-700 font-mono">0</span>
@@ -236,6 +240,7 @@
                             <th class="px-4 py-3" data-i18n="colMAC">MAC Address</th>
                             <th class="px-4 py-3" data-i18n="colVendor">Vendor</th>
                             <th class="px-4 py-3" data-i18n="colSpeed">Speed</th>
+                            <th class="px-4 py-3" data-i18n="colTodayTime">Today's Time</th>
                             <th class="px-4 py-3" data-i18n="colMember">Assigned Member</th>
                             <th class="px-4 py-3 text-center" data-i18n="colStatus">Status</th>
                             <th class="px-4 py-3 text-right" data-i18n="colAction">Actions</th>
@@ -248,7 +253,189 @@
             </div>
         </div>
 
-        <!-- Tab 3: App Signature Management (DPI) -->
+        <!-- Tab 3: Usage Statistics & Reports -->
+        <div id="tabStats" class="hidden space-y-5">
+            <!-- Header & Filter Bar -->
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-sm">
+                <div>
+                    <h3 class="font-bold text-base text-slate-800 dark:text-slate-100 flex items-center space-x-2">
+                        <i data-lucide="bar-chart-3" class="w-5 h-5 text-emerald-500"></i>
+                        <span data-i18n="statsTitle">Device & App Usage Statistics</span>
+                    </h3>
+                    <p class="text-xs text-slate-400 mt-0.5" data-i18n="statsSubtitle">Multi-dimensional analysis of device screen time, DPI app profile, and historical trends</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <!-- Device Selector -->
+                    <div class="relative">
+                        <select id="statsDeviceSelect" onchange="onStatsDeviceChange(this.value)" class="text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 py-1.5 pl-3 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer font-medium appearance-none">
+                            <option value="all" data-i18n="filterAllDevices">All Devices (Family Overview)</option>
+                        </select>
+                        <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-2.5 pointer-events-none"></i>
+                    </div>
+
+                    <!-- Date Range Switcher -->
+                    <div class="flex items-center space-x-1 bg-slate-100 dark:bg-slate-900/80 p-1 rounded-xl border border-slate-200/80 dark:border-slate-700/80 text-xs font-semibold">
+                        <button onclick="changeStatsRange('today')" id="rangeBtnToday" class="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-sm transition" data-i18n="timeRangeToday">Today</button>
+                        <button onclick="changeStatsRange('7d')" id="rangeBtn7d" class="px-2.5 py-1 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition" data-i18n="timeRange7Days">Last 7 Days</button>
+                        <button onclick="changeStatsRange('30d')" id="rangeBtn30d" class="px-2.5 py-1 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition" data-i18n="timeRange30Days">Last 30 Days</button>
+                    </div>
+
+                    <!-- Refresh Button -->
+                    <button onclick="refreshStatsWithFeedback()" class="p-2 rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition" title="Refresh Statistics">
+                        <i id="refreshStatsIcon" data-lucide="refresh-cw" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 4 Metric Highlight Cards -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-sm">
+                    <div class="flex items-center justify-between text-slate-400 text-xs font-medium mb-1">
+                        <span data-i18n="cardTotalTime">Total Screen Time</span>
+                        <div class="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center">
+                            <i data-lucide="clock" class="w-4 h-4"></i>
+                        </div>
+                    </div>
+                    <div class="text-2xl font-extrabold text-slate-800 dark:text-white mt-1 font-mono" id="statsCardTotalTime">0m</div>
+                    <div class="text-[11px] text-slate-400 mt-1" id="statsCardTotalTimeSub">Active online time</div>
+                </div>
+
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-sm">
+                    <div class="flex items-center justify-between text-slate-400 text-xs font-medium mb-1">
+                        <span data-i18n="cardTotalTraffic">Total Data Consumed</span>
+                        <div class="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 flex items-center justify-center">
+                            <i data-lucide="arrow-down-up" class="w-4 h-4"></i>
+                        </div>
+                    </div>
+                    <div class="text-2xl font-extrabold text-slate-800 dark:text-white mt-1 font-mono" id="statsCardTotalTraffic">0 MB</div>
+                    <div class="text-[11px] text-slate-400 mt-1" id="statsCardTotalTrafficSub">Rx + Tx traffic</div>
+                </div>
+
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-sm">
+                    <div class="flex items-center justify-between text-slate-400 text-xs font-medium mb-1">
+                        <span data-i18n="cardTopCategory">Top Used Category</span>
+                        <div class="w-7 h-7 rounded-lg bg-purple-50 dark:bg-purple-950/60 text-purple-600 flex items-center justify-center">
+                            <i data-lucide="pie-chart" class="w-4 h-4"></i>
+                        </div>
+                    </div>
+                    <div class="text-xl font-extrabold text-slate-800 dark:text-white mt-1 truncate" id="statsCardTopCategory">-</div>
+                    <div class="text-[11px] text-slate-400 mt-1" id="statsCardTopCategorySub">Most consumed category</div>
+                </div>
+
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-sm">
+                    <div class="flex items-center justify-between text-slate-400 text-xs font-medium mb-1">
+                        <span data-i18n="cardActivePeriod">Peak Activity Hour</span>
+                        <div class="w-7 h-7 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-600 flex items-center justify-center">
+                            <i data-lucide="activity" class="w-4 h-4"></i>
+                        </div>
+                    </div>
+                    <div class="text-xl font-extrabold text-slate-800 dark:text-white mt-1 font-mono" id="statsCardActivePeriod">-</div>
+                    <div class="text-[11px] text-slate-400 mt-1" id="statsCardActivePeriodSub">Most active time of day</div>
+                </div>
+            </div>
+
+            <!-- Visual Analytics Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                <!-- Left Panel: Application Category Profile -->
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-4">
+                            <h4 class="font-bold text-sm text-slate-800 dark:text-slate-100 flex items-center space-x-2">
+                                <i data-lucide="layout-grid" class="w-4 h-4 text-emerald-500"></i>
+                                <span data-i18n="sectionCategoryProfile">Category Usage Profile</span>
+                            </h4>
+                            <span class="text-xs text-slate-400" id="statsCategorySummaryLabel">DPI Classification</span>
+                        </div>
+                        <!-- Categories Progress List -->
+                        <div id="statsCategoriesList" class="space-y-3">
+                            <!-- Dynamically rendered categories -->
+                        </div>
+                    </div>
+                    <div id="statsCategoriesEmpty" class="hidden text-center py-8 text-slate-400 text-xs" data-i18n="noStatsData">
+                        No category data recorded
+                    </div>
+                </div>
+
+                <!-- Right Panel: 24-Hour Activity Distribution Heatmap -->
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm">
+                    <div class="flex items-center justify-between mb-4">
+                        <h4 class="font-bold text-sm text-slate-800 dark:text-slate-100 flex items-center space-x-2">
+                            <i data-lucide="clock-3" class="w-4 h-4 text-emerald-500"></i>
+                            <span data-i18n="sectionHourlyDistribution">24-Hour Activity Distribution</span>
+                        </h4>
+                        <div class="flex items-center space-x-3 text-[11px] text-slate-400">
+                            <span class="flex items-center space-x-1"><span class="w-2 h-2 rounded bg-emerald-500 inline-block"></span><span>Day (6-22h)</span></span>
+                            <span class="flex items-center space-x-1"><span class="w-2 h-2 rounded bg-amber-500 inline-block"></span><span>Late Night</span></span>
+                        </div>
+                    </div>
+                    <!-- 24-Hour Bar Visualizer -->
+                    <div id="statsHourlyChart" class="flex items-end justify-between h-36 pt-4 pb-2 px-1 border-b border-slate-100 dark:border-slate-700/60 gap-1">
+                        <!-- 24 hourly bars rendered by JS -->
+                    </div>
+                    <div class="flex justify-between text-[10px] text-slate-400 font-mono mt-1.5 px-0.5">
+                        <span>0:00</span>
+                        <span>6:00</span>
+                        <span>12:00</span>
+                        <span>18:00</span>
+                        <span>23:00</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Grid: Historical Daily Trend & Top Visited Apps -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                <!-- Multi-Day Trend Chart -->
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm">
+                    <div class="flex items-center justify-between mb-4">
+                        <h4 class="font-bold text-sm text-slate-800 dark:text-slate-100 flex items-center space-x-2">
+                            <i data-lucide="trending-up" class="w-4 h-4 text-emerald-500"></i>
+                            <span data-i18n="sectionDailyTrend">Daily Screen Time & Traffic Trend</span>
+                        </h4>
+                        <span class="text-xs font-mono text-emerald-600 dark:text-emerald-400 font-semibold" id="statsTrendRangeLabel">Last 7 Days</span>
+                    </div>
+                    <!-- Historical Bars Container -->
+                    <div id="statsTrendChartContainer" class="flex items-end justify-between h-44 pt-4 pb-2 px-2 border-b border-slate-100 dark:border-slate-700/60 gap-2">
+                        <!-- Trend bars rendered by JS -->
+                    </div>
+                    <div id="statsTrendDateLabels" class="flex justify-between text-[10px] text-slate-400 font-mono mt-1.5 px-1">
+                        <!-- Date labels rendered by JS -->
+                    </div>
+                </div>
+
+                <!-- Top Visited Applications (DPI Top Apps) -->
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-4">
+                            <h4 class="font-bold text-sm text-slate-800 dark:text-slate-100 flex items-center space-x-2">
+                                <i data-lucide="flame" class="w-4 h-4 text-rose-500"></i>
+                                <span data-i18n="sectionTopApps">Top Visited Applications</span>
+                            </h4>
+                            <span class="text-xs text-slate-400">DPI Traffic Match</span>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs">
+                                <thead>
+                                    <tr class="text-slate-400 border-b border-slate-100 dark:border-slate-700/60">
+                                        <th class="pb-2 font-medium" data-i18n="colApp">Application</th>
+                                        <th class="pb-2 font-medium" data-i18n="colCategory">Category</th>
+                                        <th class="pb-2 font-medium" data-i18n="colDuration">Duration</th>
+                                        <th class="pb-2 font-medium text-right" data-i18n="colTraffic">Data Usage</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="statsTopAppsTableBody" class="divide-y divide-slate-50 dark:divide-slate-700/30">
+                                    <!-- Dynamically rendered top apps rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div id="statsTopAppsEmpty" class="hidden text-center py-8 text-slate-400 text-xs" data-i18n="noStatsData">
+                        No app records found
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 4: App Signature Management (DPI) -->
         <div id="tabApps" class="hidden space-y-4">
             <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>

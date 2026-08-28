@@ -16,12 +16,14 @@ import (
 	"parentcontrol/internal/firewall"
 	"parentcontrol/internal/quota"
 	"parentcontrol/internal/safedns"
+	"parentcontrol/internal/stats"
 	"parentcontrol/internal/tz"
 	"parentcontrol/web"
 )
 
 func main() {
 	configPath := flag.String("config", "/etc/parentcontrol/config.json", "Path to config file")
+	statsPath := flag.String("stats", "/etc/parentcontrol/stats.json", "Path to stats database file")
 	featurePath := flag.String("feature", "/etc/appfilter/feature_cn.cfg", "Path to OAF feature file")
 	port := flag.Int("port", 8088, "HTTP Web/API port")
 	flag.Parse()
@@ -63,8 +65,12 @@ func main() {
 	// 5. Initialize device tracker
 	devTracker := device.NewDeviceTracker()
 
+	// 5.1 Initialize statistical usage tracker
+	statsTracker := stats.NewStatsTracker(*statsPath, dpiMgr)
+
 	// 6. Initialize policy and quota engine
 	engine := quota.NewPolicyEngine(fwMgr, dpiMgr, devTracker)
+	engine.SetStatsTracker(statsTracker)
 	engine.UpdateSettings(cfgStore.Data.Settings)
 
 	// Load existing members
@@ -82,6 +88,7 @@ func main() {
 		sig := <-sigChan
 		log.Printf("[Main] Caught signal %v, cleaning up and exiting...", sig)
 		engine.Stop()
+		_ = statsTracker.Save()
 		fwMgr.Cleanup()
 		dnsMgr.Cleanup()
 		os.Exit(0)
@@ -101,6 +108,7 @@ func main() {
 	}
 
 	server := api.NewServer(engine, dpiMgr, fwMgr, dnsMgr, devTracker, cfgStore, web.StaticFS)
+	server.SetStatsTracker(statsTracker)
 	if err := server.Start(webPort); err != nil {
 		log.Fatalf("[Main] HTTP server failed: %v", err)
 	}

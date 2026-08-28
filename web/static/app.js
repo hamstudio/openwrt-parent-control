@@ -12,7 +12,11 @@ let appState = {
     settings: {},
     status: {},
     currentPinInput: '',
-    editingAppCatId: null
+    editingAppCatId: null,
+    statsRange: 'today',
+    statsDevice: 'all',
+    statsOverview: null,
+    currentDeviceDetail: null
 };
 
 // Retrieve stored PIN code
@@ -388,7 +392,7 @@ function initTheme() {
 }
 
 function switchTab(tab) {
-    const tabs = ['members', 'devices', 'apps', 'settings'];
+    const tabs = ['members', 'devices', 'stats', 'apps', 'settings'];
     tabs.forEach(t => {
         const el = document.getElementById('tab' + capitalize(t));
         const btn = document.getElementById('tabBtn' + capitalize(t));
@@ -397,13 +401,13 @@ function switchTab(tab) {
         if (t === tab) {
             el.classList.remove('hidden');
             btn.className = 'px-4 py-2 text-sm font-semibold rounded-xl bg-emerald-600 text-white shadow-sm transition whitespace-nowrap';
-            if (t === 'apps') {
+            if (t === 'apps' || t === 'stats') {
                 btn.className += ' flex items-center space-x-1.5';
             }
         } else {
             el.classList.add('hidden');
             btn.className = 'px-4 py-2 text-sm font-semibold rounded-xl text-slate-600 dark:text-slate-300 hover:bg-emerald-50 dark:hover:bg-slate-800 transition whitespace-nowrap';
-            if (t === 'apps') {
+            if (t === 'apps' || t === 'stats') {
                 btn.className += ' flex items-center space-x-1.5';
             }
         }
@@ -418,6 +422,13 @@ function switchTab(tab) {
             addAppBtn.classList.add('flex');
         }
         renderAppManagement();
+    } else if (tab === 'stats') {
+        if (addMemberBtn) addMemberBtn.classList.add('hidden');
+        if (addAppBtn) {
+            addAppBtn.classList.add('hidden');
+            addAppBtn.classList.remove('flex');
+        }
+        loadAndRenderStats();
     } else {
         if (addMemberBtn) addMemberBtn.classList.remove('hidden');
         if (addAppBtn) {
@@ -664,7 +675,7 @@ function renderMembers() {
 function renderDevices(filterKeyword = '') {
     const tbody = document.getElementById('devicesTableBody');
     if (!appState.devices || appState.devices.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-400">' + t('noDevices') + '</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-slate-400">' + t('noDevices') + '</td></tr>';
         return;
     }
 
@@ -678,7 +689,7 @@ function renderDevices(filterKeyword = '') {
     });
 
     if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-400">' + t('noMatchingDevices') + '</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-slate-400">' + t('noMatchingDevices') + '</td></tr>';
         return;
     }
 
@@ -692,6 +703,12 @@ function renderDevices(filterKeyword = '') {
         const speedText = d.rx_rate >= 1024 * 1024 
             ? (d.rx_rate / (1024 * 1024)).toFixed(1) + ' MB/s' 
             : (d.rx_rate / 1024).toFixed(0) + ' KB/s';
+
+        const todayTimeText = (d.used_minutes_today && d.used_minutes_today > 0)
+            ? (d.used_minutes_today >= 60 
+                ? `${Math.floor(d.used_minutes_today / 60)}h ${d.used_minutes_today % 60}m` 
+                : `${d.used_minutes_today}m`)
+            : '0m';
 
         const statusBadge = d.is_locked
             ? `<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-400 inline-flex items-center space-x-1"><i data-lucide="lock" class="w-3 h-3"></i><span>${t('locked')}</span></span>`
@@ -707,6 +724,7 @@ function renderDevices(filterKeyword = '') {
                 <td class="px-4 py-3 font-mono text-xs text-slate-500 dark:text-slate-400">${d.mac}</td>
                 <td class="px-4 py-3 text-xs">${d.vendor || 'Generic'}</td>
                 <td class="px-4 py-3 text-xs font-mono text-emerald-600 dark:text-emerald-400 font-semibold">${d.online ? speedText : '-'}</td>
+                <td class="px-4 py-3 text-xs font-mono font-semibold ${d.used_minutes_today > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}">${todayTimeText}</td>
                 <td class="px-4 py-3">${memberName}</td>
                 <td class="px-4 py-3 text-center">${statusBadge}</td>
                 <td class="px-4 py-3 text-right">
@@ -1503,3 +1521,412 @@ async function saveGlobalSettings() {
         }
     }
 }
+
+// ==========================================
+// Usage Statistics & Reporting Module
+// ==========================================
+
+function formatDuration(minutes) {
+    if (!minutes || minutes <= 0) return '0m';
+    if (minutes >= 60) {
+        const h = Math.floor(minutes / 60);
+        const m = minutes % 60;
+        return m > 0 ? `${h}h ${m}m` : `${h}h`;
+    }
+    return `${minutes}m`;
+}
+
+function formatTrafficBytes(bytes) {
+    if (!bytes || bytes === 0) return '0 MB';
+    if (bytes >= 1024 * 1024 * 1024) {
+        return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+    }
+    if (bytes >= 1024 * 1024) {
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+    if (bytes >= 1024) {
+        return (bytes / 1024).toFixed(0) + ' KB';
+    }
+    return bytes + ' B';
+}
+
+function getCategoryColor(className) {
+    switch (className) {
+        case 'game':
+            return {
+                bar: 'bg-gradient-to-r from-rose-500 to-pink-500',
+                badge: 'bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400',
+                icon: 'gamepad-2'
+            };
+        case 'video':
+            return {
+                bar: 'bg-gradient-to-r from-amber-500 to-orange-500',
+                badge: 'bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400',
+                icon: 'play-circle'
+            };
+        case 'chat':
+            return {
+                bar: 'bg-gradient-to-r from-blue-500 to-indigo-500',
+                badge: 'bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400',
+                icon: 'message-square'
+            };
+        case 'work':
+            return {
+                bar: 'bg-gradient-to-r from-emerald-500 to-teal-500',
+                badge: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400',
+                icon: 'briefcase'
+            };
+        case 'music':
+            return {
+                bar: 'bg-gradient-to-r from-purple-500 to-violet-500',
+                badge: 'bg-purple-50 text-purple-600 dark:bg-purple-950/60 dark:text-purple-400',
+                icon: 'music'
+            };
+        case 'download':
+            return {
+                bar: 'bg-gradient-to-r from-cyan-500 to-blue-500',
+                badge: 'bg-cyan-50 text-cyan-600 dark:bg-cyan-950/60 dark:text-cyan-400',
+                icon: 'download'
+            };
+        default:
+            return {
+                bar: 'bg-gradient-to-r from-slate-400 to-slate-500',
+                badge: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+                icon: 'grid'
+            };
+    }
+}
+
+async function loadAndRenderStats() {
+    startProgress();
+    try {
+        const res = await authFetch('/api/stats/overview');
+        if (res.ok) {
+            appState.statsOverview = await res.json();
+            updateStatsDeviceDropdown();
+            
+            if (!appState.statsDevice || appState.statsDevice === 'all') {
+                renderStatsOverview(appState.statsOverview);
+            } else {
+                await loadDeviceStatsDetail(appState.statsDevice);
+            }
+        }
+    } catch (e) {
+        console.error('Failed to load stats:', e);
+    } finally {
+        finishProgress();
+        lucide.createIcons();
+    }
+}
+
+function updateStatsDeviceDropdown() {
+    const select = document.getElementById('statsDeviceSelect');
+    if (!select) return;
+
+    const currentVal = appState.statsDevice || 'all';
+    let html = `<option value="all" ${currentVal === 'all' ? 'selected' : ''}>${t('filterAllDevices')}</option>`;
+
+    if (appState.devices && appState.devices.length > 0) {
+        appState.devices.forEach(d => {
+            const member = appState.members.find(m => m.id === d.member_id || (m.device_macs && m.device_macs.includes(d.mac)));
+            const memberLabel = member ? ` [${member.name}]` : '';
+            const name = (d.hostname && d.hostname !== 'Unknown-Device') ? d.hostname : (d.ip || d.mac);
+            html += `<option value="${d.mac}" ${currentVal === d.mac ? 'selected' : ''}>${name}${memberLabel} (${d.mac})</option>`;
+        });
+    }
+
+    select.innerHTML = html;
+}
+
+async function onStatsDeviceChange(val) {
+    appState.statsDevice = val;
+    if (val === 'all') {
+        if (appState.statsOverview) {
+            renderStatsOverview(appState.statsOverview);
+        } else {
+            await loadAndRenderStats();
+        }
+    } else {
+        await loadDeviceStatsDetail(val);
+    }
+}
+
+async function changeStatsRange(range) {
+    appState.statsRange = range;
+    ['today', '7d', '30d'].forEach(r => {
+        const btn = document.getElementById('rangeBtn' + (r === 'today' ? 'Today' : r));
+        if (btn) {
+            if (r === range) {
+                btn.className = 'px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-sm transition';
+            } else {
+                btn.className = 'px-2.5 py-1 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition';
+            }
+        }
+    });
+
+    if (appState.statsDevice && appState.statsDevice !== 'all') {
+        await loadDeviceStatsDetail(appState.statsDevice);
+    } else {
+        if (appState.statsOverview) {
+            renderStatsOverview(appState.statsOverview);
+        } else {
+            await loadAndRenderStats();
+        }
+    }
+}
+
+async function refreshStatsWithFeedback() {
+    const icon = document.getElementById('refreshStatsIcon');
+    if (icon) icon.classList.add('animate-spin');
+    await loadAndRenderStats();
+    if (icon) setTimeout(() => icon.classList.remove('animate-spin'), 600);
+}
+
+async function loadDeviceStatsDetail(mac) {
+    const days = appState.statsRange === '30d' ? 30 : (appState.statsRange === '7d' ? 7 : 1);
+    startProgress();
+    try {
+        const res = await authFetch(`/api/stats/devices/${mac}?days=${days}`);
+        if (res.ok) {
+            const detail = await res.json();
+            appState.currentDeviceDetail = detail;
+            renderDeviceDetailStats(detail);
+        }
+    } catch (e) {
+        console.error('Failed to load device stats detail:', e);
+    } finally {
+        finishProgress();
+        lucide.createIcons();
+    }
+}
+
+function renderStatsOverview(overview) {
+    if (!overview) return;
+
+    // 1. Highlight Cards
+    document.getElementById('statsCardTotalTime').innerText = formatDuration(overview.total_online_minutes);
+    document.getElementById('statsCardTotalTraffic').innerText = formatTrafficBytes(overview.total_bytes);
+    document.getElementById('statsCardTopCategory').innerText = overview.top_category || t('unassigned');
+    
+    // Find peak activity hour from device hourly data or rankings
+    let peakHourText = '-';
+    let maxHourVal = 0;
+    const hourlyAgg = new Array(24).fill(0);
+
+    if (appState.devices && appState.devices.length > 0) {
+        // Approximate peak from active devices
+        peakHourText = `${new Date().getHours()}:00`;
+    }
+    document.getElementById('statsCardActivePeriod').innerText = peakHourText;
+
+    // 2. Categories Breakdown
+    renderStatsCategories(overview.category_breakdown);
+
+    // 3. Hourly Activity Bar Chart (aggregated across devices)
+    renderStatsHourlyChart(hourlyAgg);
+
+    // 4. Historical Trend Chart
+    renderStatsTrendChart(overview.historical_trend_7day || []);
+
+    // 5. Top Apps (from rankings or categories)
+    renderStatsTopApps([]);
+}
+
+function renderDeviceDetailStats(detail) {
+    if (!detail) return;
+
+    const today = detail.today_stats || {};
+    const totalMin = detail.history ? detail.history.reduce((acc, h) => acc + h.used_minutes, 0) : (today.used_minutes || 0);
+    const totalBytes = detail.history ? detail.history.reduce((acc, h) => acc + h.rx_bytes + h.tx_bytes, 0) : ((today.rx_bytes || 0) + (today.tx_bytes || 0));
+
+    // 1. Highlight Cards
+    document.getElementById('statsCardTotalTime').innerText = formatDuration(totalMin);
+    document.getElementById('statsCardTotalTraffic').innerText = formatTrafficBytes(totalBytes);
+
+    let topCatName = '-';
+    if (detail.category_breakdown && detail.category_breakdown.length > 0) {
+        topCatName = detail.category_breakdown[0].class_zh || detail.category_breakdown[0].class_name;
+    }
+    document.getElementById('statsCardTopCategory').innerText = topCatName;
+
+    // Calculate peak hour
+    let peakHour = -1;
+    let maxHourMin = 0;
+    if (detail.hourly_activity) {
+        detail.hourly_activity.forEach((m, h) => {
+            if (m > maxHourMin) {
+                maxHourMin = m;
+                peakHour = h;
+            }
+        });
+    }
+    document.getElementById('statsCardActivePeriod').innerText = peakHour >= 0 ? `${peakHour}:00 (${maxHourMin}m)` : '-';
+
+    // 2. Categories Breakdown
+    renderStatsCategories(detail.category_breakdown);
+
+    // 3. 24-Hour Activity
+    renderStatsHourlyChart(detail.hourly_activity || new Array(24).fill(0));
+
+    // 4. Historical Trend
+    renderStatsTrendChart(detail.history || []);
+
+    // 5. Top Apps
+    renderStatsTopApps(detail.top_apps || []);
+}
+
+function renderStatsCategories(categories) {
+    const container = document.getElementById('statsCategoriesList');
+    const emptyEl = document.getElementById('statsCategoriesEmpty');
+    if (!container) return;
+
+    if (!categories || categories.length === 0) {
+        container.innerHTML = '';
+        if (emptyEl) emptyEl.classList.remove('hidden');
+        return;
+    }
+    if (emptyEl) emptyEl.classList.add('hidden');
+
+    container.innerHTML = categories.map(cat => {
+        const theme = getCategoryColor(cat.class_name);
+        const percent = (cat.percentage || 0).toFixed(1);
+        const zhName = cat.class_zh || cat.class_name;
+
+        return `
+            <div class="space-y-1.5">
+                <div class="flex items-center justify-between text-xs">
+                    <div class="flex items-center space-x-2">
+                        <span class="p-1 rounded-md ${theme.badge}">
+                            <i data-lucide="${theme.icon}" class="w-3.5 h-3.5"></i>
+                        </span>
+                        <span class="font-semibold text-slate-700 dark:text-slate-200">${zhName}</span>
+                    </div>
+                    <div class="flex items-center space-x-2 font-mono text-slate-500 dark:text-slate-400">
+                        <span class="font-bold text-slate-700 dark:text-slate-200">${formatDuration(cat.minutes)}</span>
+                        <span>·</span>
+                        <span>${percent}%</span>
+                        ${cat.bytes > 0 ? `<span>·</span><span>${formatTrafficBytes(cat.bytes)}</span>` : ''}
+                    </div>
+                </div>
+                <div class="w-full bg-slate-100 dark:bg-slate-700/60 rounded-full h-2 overflow-hidden">
+                    <div class="h-2 rounded-full ${theme.bar} transition-all duration-500" style="width: ${Math.max(percent, 2)}%"></div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderStatsHourlyChart(hourlyArr) {
+    const container = document.getElementById('statsHourlyChart');
+    if (!container) return;
+
+    const maxVal = Math.max(...hourlyArr, 10);
+
+    container.innerHTML = hourlyArr.map((m, h) => {
+        const isLateNight = h >= 22 || h <= 6;
+        const barColor = isLateNight 
+            ? 'bg-gradient-to-t from-amber-500 to-amber-400 hover:from-amber-600 hover:to-amber-500' 
+            : 'bg-gradient-to-t from-emerald-500 to-teal-400 hover:from-emerald-600 hover:to-teal-500';
+        
+        const heightPct = m > 0 ? Math.max((m / maxVal) * 100, 8) : 4;
+        const opacity = m > 0 ? 'opacity-100' : 'opacity-20';
+
+        return `
+            <div class="flex-1 flex flex-col items-center justify-end h-full group relative cursor-pointer">
+                <!-- Tooltip -->
+                <div class="absolute bottom-full mb-1.5 hidden group-hover:flex flex-col items-center z-20 pointer-events-none">
+                    <div class="bg-slate-900 text-white text-[10px] rounded-lg px-2 py-1 shadow-lg whitespace-nowrap">
+                        <span class="font-bold">${h}:00</span> · <span>${m} min</span>
+                        ${isLateNight && m > 0 ? '<span class="text-amber-400 ml-1 font-semibold">⚠️ 夜间</span>' : ''}
+                    </div>
+                    <div class="w-1.5 h-1.5 bg-slate-900 rotate-45 -mt-0.5"></div>
+                </div>
+                <!-- Bar -->
+                <div class="w-full rounded-t-sm ${barColor} ${opacity} transition-all duration-300" style="height: ${heightPct}%"></div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderStatsTrendChart(history) {
+    const container = document.getElementById('statsTrendChartContainer');
+    const labelsContainer = document.getElementById('statsTrendDateLabels');
+    if (!container) return;
+
+    if (!history || history.length === 0) {
+        container.innerHTML = `<div class="w-full text-center text-xs text-slate-400 py-12">${t('noStatsData')}</div>`;
+        if (labelsContainer) labelsContainer.innerHTML = '';
+        return;
+    }
+
+    const maxMin = Math.max(...history.map(h => h.used_minutes), 30);
+
+    container.innerHTML = history.map(rec => {
+        const heightPct = rec.used_minutes > 0 ? Math.max((rec.used_minutes / maxMin) * 100, 6) : 3;
+        const opacity = rec.used_minutes > 0 ? 'opacity-100' : 'opacity-20';
+        const formattedDate = rec.date ? rec.date.substring(5) : '';
+
+        return `
+            <div class="flex-1 flex flex-col items-center justify-end h-full group relative cursor-pointer">
+                <!-- Tooltip -->
+                <div class="absolute bottom-full mb-1.5 hidden group-hover:flex flex-col items-center z-20 pointer-events-none">
+                    <div class="bg-slate-900 text-white text-[10px] rounded-lg px-2.5 py-1.5 shadow-lg whitespace-nowrap text-center">
+                        <div class="font-bold">${rec.date}</div>
+                        <div>时长: <span class="text-emerald-400 font-semibold">${formatDuration(rec.used_minutes)}</span></div>
+                        ${(rec.rx_bytes + rec.tx_bytes) > 0 ? `<div>流量: <span class="text-blue-400">${formatTrafficBytes(rec.rx_bytes + rec.tx_bytes)}</span></div>` : ''}
+                    </div>
+                    <div class="w-1.5 h-1.5 bg-slate-900 rotate-45 -mt-0.5"></div>
+                </div>
+                <!-- Bar -->
+                <div class="w-full rounded-t-md bg-gradient-to-t from-emerald-600 to-teal-400 hover:from-emerald-500 hover:to-teal-300 ${opacity} transition-all duration-300 shadow-sm" style="height: ${heightPct}%"></div>
+            </div>
+        `;
+    }).join('');
+
+    if (labelsContainer) {
+        labelsContainer.innerHTML = history.map(rec => {
+            const shortDate = rec.date ? rec.date.substring(5) : '';
+            return `<span class="truncate text-center flex-1">${shortDate}</span>`;
+        }).join('');
+    }
+}
+
+function renderStatsTopApps(topApps) {
+    const tbody = document.getElementById('statsTopAppsTableBody');
+    const emptyEl = document.getElementById('statsTopAppsEmpty');
+    if (!tbody) return;
+
+    if (!topApps || topApps.length === 0) {
+        tbody.innerHTML = '';
+        if (emptyEl) emptyEl.classList.remove('hidden');
+        return;
+    }
+    if (emptyEl) emptyEl.classList.add('hidden');
+
+    tbody.innerHTML = topApps.slice(0, 10).map(app => {
+        const theme = getCategoryColor(app.class_name);
+        const zhCat = app.class_zh || app.class_name || '其他';
+        const appName = tDpiApp(app.app_name || `App-${app.app_id}`);
+
+        return `
+            <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-750/50 transition">
+                <td class="py-2.5 font-semibold text-slate-800 dark:text-slate-100 flex items-center space-x-2">
+                    <span class="p-1 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                        <i data-lucide="${theme.icon}" class="w-3.5 h-3.5"></i>
+                    </span>
+                    <span class="truncate">${appName}</span>
+                </td>
+                <td class="py-2.5">
+                    <span class="px-2 py-0.5 rounded-md text-[10px] font-semibold ${theme.badge}">${zhCat}</span>
+                </td>
+                <td class="py-2.5 font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                    ${formatDuration(app.minutes)}
+                </td>
+                <td class="py-2.5 text-right font-mono text-slate-500 dark:text-slate-400">
+                    ${formatTrafficBytes(app.bytes)}
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+

@@ -11,23 +11,22 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import xyz.hamguy.parentcontrol.core.NativeBridge
 import xyz.hamguy.parentcontrol.model.Device
+import xyz.hamguy.parentcontrol.model.GlobalSettings
 import xyz.hamguy.parentcontrol.model.Member
 import xyz.hamguy.parentcontrol.model.SystemStatus
 import java.util.concurrent.TimeUnit
-import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
 
-class ParentControlRepository(var baseUrl: String = "http://192.168.0.110:8088") {
+class ParentControlRepository(
+    var baseUrl: String = "http://192.168.0.110:8088",
+    var pinCode: String = ""
+) {
 
     private val gson = Gson()
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(5, TimeUnit.SECONDS)
         .readTimeout(10, TimeUnit.SECONDS)
         .build()
-
-    private var nativeClientPtr: Long = 0
 
     private val _status = MutableStateFlow<SystemStatus?>(null)
     val status: StateFlow<SystemStatus?> = _status.asStateFlow()
@@ -38,15 +37,30 @@ class ParentControlRepository(var baseUrl: String = "http://192.168.0.110:8088")
     private val _devices = MutableStateFlow<List<Device>>(emptyList())
     val devices: StateFlow<List<Device>> = _devices.asStateFlow()
 
+    private val _settings = MutableStateFlow<GlobalSettings>(GlobalSettings())
+    val settings: StateFlow<GlobalSettings> = _settings.asStateFlow()
+
+    private val _isConnected = MutableStateFlow(false)
+    val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
+
+    private val _needsPinAuth = MutableStateFlow(false)
+    val needsPinAuth: StateFlow<Boolean> = _needsPinAuth.asStateFlow()
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    init {
-        try {
-            nativeClientPtr = NativeBridge.parentcontrol_create_client(baseUrl)
-        } catch (e: Throwable) {
-            nativeClientPtr = 0
+    private fun newRequestBuilder(endpoint: String): Request.Builder {
+        val cleanBase = baseUrl.trimEnd('/')
+        val cleanEndpoint = if (endpoint.startsWith("/")) endpoint else "/$endpoint"
+        val builder = Request.Builder()
+            .url("$cleanBase$cleanEndpoint")
+            .header("Accept", "application/json")
+
+        if (pinCode.isNotEmpty()) {
+            builder.header("X-Pin-Code", pinCode)
+            builder.header("Authorization", "Bearer $pinCode")
         }
+        return builder
     }
 
     suspend fun refreshAll() = withContext(Dispatchers.IO) {
@@ -61,48 +75,36 @@ class ParentControlRepository(var baseUrl: String = "http://192.168.0.110:8088")
     }
 
     suspend fun fetchStatus(): Result<SystemStatus> = withContext(Dispatchers.IO) {
-        if (nativeClientPtr != 0L) {
-            try {
-                val jsonResult = suspendCoroutine<String?> { cont ->
-                    NativeBridge.parentcontrol_fetch_status_json(nativeClientPtr) { json, _ ->
-                        cont.resume(json)
-                    }
-                }
-                if (jsonResult != null) {
-                    val status = gson.fromJson(jsonResult, SystemStatus::class.java)
-                    _status.value = status
-                    return@withContext Result.success(status)
-                }
-            } catch (ignored: Throwable) {}
-        }
-
-        // Fallback to HTTP REST
         try {
-            val request = Request.Builder()
-                .url("$baseUrl/api/v1/status")
-                .get()
-                .build()
+            val request = newRequestBuilder("/api/status").get().build()
             val response = httpClient.newCall(request).execute()
             val body = response.body?.string() ?: "{}"
-            val status = gson.fromJson(body, SystemStatus::class.java)
-            _status.value = status
-            Result.success(status)
+            val s = gson.fromJson(body, SystemStatus::class.java)
+            _status.value = s
+            _isConnected.value = true
+            if (s.pinRequired && pinCode.isEmpty()) {
+                _needsPinAuth.value = true
+            }
+            Result.success(s)
         } catch (e: Exception) {
+            _isConnected.value = false
             Result.failure(e)
         }
     }
 
     suspend fun fetchMembers(): Result<List<Member>> = withContext(Dispatchers.IO) {
         try {
-            val request = Request.Builder()
-                .url("$baseUrl/api/v1/members")
-                .get()
-                .build()
+            val request = newRequestBuilder("/api/members").get().build()
             val response = httpClient.newCall(request).execute()
+            if (response.code == 401) {
+                _needsPinAuth.value = true
+                return@withContext Result.failure(Exception("401 PIN code required"))
+            }
             val body = response.body?.string() ?: "[]"
             val type = object : TypeToken<List<Member>>() {}.type
             val memberList: List<Member> = gson.fromJson(body, type) ?: emptyList()
             _members.value = memberList
+            _needsPinAuth.value = false
             Result.success(memberList)
         } catch (e: Exception) {
             Result.failure(e)
@@ -111,11 +113,12 @@ class ParentControlRepository(var baseUrl: String = "http://192.168.0.110:8088")
 
     suspend fun fetchDevices(): Result<List<Device>> = withContext(Dispatchers.IO) {
         try {
-            val request = Request.Builder()
-                .url("$baseUrl/api/v1/devices")
-                .get()
-                .build()
+            val request = newRequestBuilder("/api/devices").get().build()
             val response = httpClient.newCall(request).execute()
+            if (response.code == 401) {
+                _needsPinAuth.value = true
+                return@withContext Result.failure(Exception("401 PIN code required"))
+            }
             val body = response.body?.string() ?: "[]"
             val type = object : TypeToken<List<Device>>() {}.type
             val deviceList: List<Device> = gson.fromJson(body, type) ?: emptyList()
@@ -127,25 +130,9 @@ class ParentControlRepository(var baseUrl: String = "http://192.168.0.110:8088")
     }
 
     suspend fun lockMember(memberId: String, lock: Boolean = true): Result<Boolean> = withContext(Dispatchers.IO) {
-        if (nativeClientPtr != 0L) {
-            try {
-                val success = suspendCoroutine<Boolean> { cont ->
-                    NativeBridge.parentcontrol_lock_member(nativeClientPtr, memberId) { ok, _ ->
-                        cont.resume(ok)
-                    }
-                }
-                if (success) {
-                    fetchMembers()
-                    return@withContext Result.success(true)
-                }
-            } catch (ignored: Throwable) {}
-        }
-
-        // Fallback HTTP
         try {
             val action = if (lock) "lock" else "unlock"
-            val request = Request.Builder()
-                .url("$baseUrl/api/v1/members/$memberId/$action")
+            val request = newRequestBuilder("/api/members/$memberId/$action")
                 .post("{}".toRequestBody("application/json".toMediaType()))
                 .build()
             val response = httpClient.newCall(request).execute()
@@ -157,12 +144,51 @@ class ParentControlRepository(var baseUrl: String = "http://192.168.0.110:8088")
         }
     }
 
-    fun close() {
-        if (nativeClientPtr != 0L) {
-            try {
-                NativeBridge.parentcontrol_destroy_client(nativeClientPtr)
-            } catch (ignored: Throwable) {}
-            nativeClientPtr = 0
+    suspend fun bonusMember(memberId: String, minutes: Int = 30): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val request = newRequestBuilder("/api/members/$memberId/bonus?minutes=$minutes")
+                .post("{}".toRequestBody("application/json".toMediaType()))
+                .build()
+            val response = httpClient.newCall(request).execute()
+            val ok = response.isSuccessful
+            if (ok) fetchMembers()
+            Result.success(ok)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun lockDevice(mac: String, lock: Boolean = true): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val action = if (lock) "lock" else "unlock"
+            val request = newRequestBuilder("/api/devices/$mac/$action")
+                .post("{}".toRequestBody("application/json".toMediaType()))
+                .build()
+            val response = httpClient.newCall(request).execute()
+            val ok = response.isSuccessful
+            if (ok) fetchDevices()
+            Result.success(ok)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun assignDevice(mac: String, memberId: String?): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val payload = mapOf("member_id" to (memberId ?: ""))
+            val jsonBody = gson.toJson(payload)
+            val request = newRequestBuilder("/api/devices/$mac/assign")
+                .post(jsonBody.toRequestBody("application/json".toMediaType()))
+                .build()
+            val response = httpClient.newCall(request).execute()
+            val ok = response.isSuccessful
+            if (ok) {
+                fetchMembers()
+                fetchDevices()
+            }
+            Result.success(ok)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 }

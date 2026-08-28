@@ -13,6 +13,7 @@ import (
 	"parentcontrol/internal/dpi"
 	"parentcontrol/internal/firewall"
 	"parentcontrol/internal/models"
+	"parentcontrol/internal/stats"
 	"parentcontrol/internal/tz"
 )
 
@@ -24,6 +25,7 @@ type PolicyEngine struct {
 	fw           *firewall.FirewallManager
 	dpi          *dpi.DPIManager
 	tracker      *device.DeviceTracker
+	stats        *stats.StatsTracker
 	stopChan     chan struct{}
 	lastResetDay int
 }
@@ -49,6 +51,13 @@ func NewPolicyEngine(fw *firewall.FirewallManager, dpiMgr *dpi.DPIManager, dt *d
 	return engine
 }
 
+// SetStatsTracker sets the statistical tracking engine
+func (pe *PolicyEngine) SetStatsTracker(st *stats.StatsTracker) {
+	pe.mu.Lock()
+	defer pe.mu.Unlock()
+	pe.stats = st
+}
+
 // Start launches the background periodic policy evaluation and quota counting loop
 func (pe *PolicyEngine) Start() {
 	go pe.runLoop()
@@ -59,6 +68,9 @@ func (pe *PolicyEngine) Start() {
 func (pe *PolicyEngine) Stop() {
 	close(pe.stopChan)
 	pe.fw.Cleanup()
+	if pe.stats != nil {
+		_ = pe.stats.Save()
+	}
 	log.Println("[Engine] Policy engine stopped.")
 }
 
@@ -104,6 +116,10 @@ func (pe *PolicyEngine) checkDailyReset(now time.Time) {
 			m.UsedMinutes = 0
 		}
 		pe.lastResetDay = now.Day()
+
+		if pe.stats != nil {
+			pe.stats.CheckDailyRollover(now, resetHour)
+		}
 	}
 }
 
@@ -112,6 +128,22 @@ func (pe *PolicyEngine) evaluateActiveUsage(now time.Time) {
 	pe.mu.Lock()
 	defer pe.mu.Unlock()
 
+	// 1. Scan and record per-device activity into stats engine
+	devices := pe.tracker.ScanDevices()
+	for _, dev := range devices {
+		if dev.Online && (dev.RxRate > 2048 || dev.TxRate > 2048) {
+			if pe.stats != nil {
+				pe.stats.RecordMinuteActivity(dev.MAC, dev.IP, dev.Hostname, dev.MemberID, dev.RxRate*60, now)
+			}
+		}
+	}
+
+	// 2. Scan DPI / OAF visits
+	if pe.stats != nil {
+		pe.stats.ScanOAFVisits(now)
+	}
+
+	// 3. Update member used minutes
 	for _, member := range pe.members {
 		if !member.Enabled {
 			continue

@@ -18,19 +18,21 @@ import (
 	"parentcontrol/internal/models"
 	"parentcontrol/internal/quota"
 	"parentcontrol/internal/safedns"
+	"parentcontrol/internal/stats"
 	"parentcontrol/internal/tz"
 )
 
 // Server manages unified API and Web services
 type Server struct {
-	engine     *quota.PolicyEngine
-	dpiMgr     *dpi.DPIManager
-	fwMgr      *firewall.FirewallManager
-	dnsMgr     *safedns.SafeDNSManager
-	devTracker *device.DeviceTracker
-	config     *config.ConfigStore
-	staticFS   embed.FS
-	startTime  time.Time
+	engine       *quota.PolicyEngine
+	dpiMgr       *dpi.DPIManager
+	fwMgr        *firewall.FirewallManager
+	dnsMgr       *safedns.SafeDNSManager
+	devTracker   *device.DeviceTracker
+	statsTracker *stats.StatsTracker
+	config       *config.ConfigStore
+	staticFS     embed.FS
+	startTime    time.Time
 }
 
 // NewServer creates a new API server instance
@@ -55,6 +57,11 @@ func NewServer(
 	}
 }
 
+// SetStatsTracker sets the stats tracker
+func (s *Server) SetStatsTracker(st *stats.StatsTracker) {
+	s.statsTracker = st
+}
+
 // Start registers routes and begins listening for HTTP requests
 func (s *Server) Start(port int) error {
 	mux := http.NewServeMux()
@@ -72,6 +79,11 @@ func (s *Server) Start(port int) error {
 	mux.HandleFunc("/api/apps/", s.requireAuth(s.handleAppActions))
 	mux.HandleFunc("/api/categories", s.requireAuth(s.handleCategories))
 	mux.HandleFunc("/api/settings", s.requireAuth(s.handleSettings))
+
+	// 2.1 Usage statistics API routes
+	mux.HandleFunc("/api/stats/overview", s.requireAuth(s.handleStatsOverview))
+	mux.HandleFunc("/api/stats/devices", s.requireAuth(s.handleStatsDevices))
+	mux.HandleFunc("/api/stats/devices/", s.requireAuth(s.handleStatsDeviceDetail))
 
 	// 3. Static files and frontend Web UI
 	staticSub, err := fs.Sub(s.staticFS, "static")
@@ -249,6 +261,9 @@ func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request) {
 		}
 		if blacklistedMACs[normMAC] {
 			devices[i].IsLocked = true
+		}
+		if s.statsTracker != nil {
+			devices[i].UsedMinutesToday = s.statsTracker.GetDeviceUsedMinutesToday(devices[i].MAC)
 		}
 	}
 
@@ -497,3 +512,87 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		s.jsonResponse(w, http.StatusMethodNotAllowed, map[string]string{"error": "Method not allowed"})
 	}
 }
+
+func (s *Server) handleStatsOverview(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		s.jsonResponse(w, http.StatusMethodNotAllowed, map[string]string{"error": "Method not allowed"})
+		return
+	}
+
+	devices := s.devTracker.ScanDevices()
+	members := s.engine.GetMembers()
+
+	if s.statsTracker == nil {
+		s.jsonResponse(w, http.StatusOK, models.StatsOverview{
+			Date:                tz.Now().Format("2006-01-02"),
+			CategoryBreakdown:   []*models.CategoryUsageStat{},
+			DeviceRankings:      []models.DeviceDaySummary{},
+			HistoricalTrend7Day: []*models.HistoricalDayRecord{},
+		})
+		return
+	}
+
+	overview := s.statsTracker.GetOverview(devices, members)
+	s.jsonResponse(w, http.StatusOK, overview)
+}
+
+func (s *Server) handleStatsDevices(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		s.jsonResponse(w, http.StatusMethodNotAllowed, map[string]string{"error": "Method not allowed"})
+		return
+	}
+
+	devices := s.devTracker.ScanDevices()
+	members := s.engine.GetMembers()
+
+	if s.statsTracker == nil {
+		s.jsonResponse(w, http.StatusOK, []models.DeviceDaySummary{})
+		return
+	}
+
+	overview := s.statsTracker.GetOverview(devices, members)
+	s.jsonResponse(w, http.StatusOK, overview.DeviceRankings)
+}
+
+func (s *Server) handleStatsDeviceDetail(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		s.jsonResponse(w, http.StatusMethodNotAllowed, map[string]string{"error": "Method not allowed"})
+		return
+	}
+
+	path := strings.TrimPrefix(r.URL.Path, "/api/stats/devices/")
+	parts := strings.Split(path, "/")
+	if len(parts) == 0 || parts[0] == "" {
+		s.jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "Device MAC required"})
+		return
+	}
+
+	mac := parts[0]
+	daysStr := r.URL.Query().Get("days")
+	days := 7
+	if d, err := strconv.Atoi(daysStr); err == nil && d > 0 {
+		days = d
+	}
+
+	dev := s.devTracker.GetDevice(mac)
+	var member *models.Member
+	if dev != nil && dev.MemberID != "" {
+		if m, ok := s.engine.GetMember(dev.MemberID); ok {
+			member = m
+		}
+	}
+
+	if s.statsTracker == nil {
+		s.jsonResponse(w, http.StatusOK, models.DeviceStatsDetail{
+			MAC:               mac,
+			History:           []*models.HistoricalDayRecord{},
+			CategoryBreakdown: []*models.CategoryUsageStat{},
+			TopApps:           []*models.AppUsageStat{},
+		})
+		return
+	}
+
+	detail := s.statsTracker.GetDeviceStatsDetail(mac, days, dev, member)
+	s.jsonResponse(w, http.StatusOK, detail)
+}
+

@@ -17,8 +17,9 @@ type Device struct {
 	IsLocked   bool      `json:"is_locked"` // Whether blocked via one-click lock
 	TxRate     uint64    `json:"tx_rate"`   // Real-time upstream rate in bytes/s
 	RxRate     uint64    `json:"rx_rate"`   // Real-time downstream rate in bytes/s
-	TotalBytes uint64    `json:"total_bytes"`
-	LastSeen   time.Time `json:"last_seen"`
+	TotalBytes       uint64    `json:"total_bytes"`
+	UsedMinutesToday int       `json:"used_minutes_today"` // Active online duration today in minutes
+	LastSeen         time.Time `json:"last_seen"`
 }
 
 // TimeRange represents a time interval within a day (24-hour format, e.g. "21:30" to "07:00")
@@ -117,3 +118,92 @@ type SystemStatus struct {
 	TimezoneName      string    `json:"timezone_name"`
 	TimezoneOffset    int       `json:"timezone_offset"`
 }
+
+// CategoryUsageStat represents aggregated usage for a specific category
+type CategoryUsageStat struct {
+	ClassID    int     `json:"class_id"`
+	ClassName  string  `json:"class_name"`
+	ClassZh    string  `json:"class_zh"`
+	Icon       string  `json:"icon"`
+	Minutes    int     `json:"minutes"`
+	Bytes      uint64  `json:"bytes"`
+	Percentage float64 `json:"percentage"` // 0.0 - 100.0
+}
+
+// AppUsageStat represents usage metrics for an individual application
+type AppUsageStat struct {
+	AppID      int       `json:"app_id"`
+	AppName    string    `json:"app_name"`
+	ClassID    int       `json:"class_id"`
+	ClassName  string    `json:"class_name"`
+	ClassZh    string    `json:"class_zh"`
+	Minutes    int       `json:"minutes"`
+	Bytes      uint64    `json:"bytes"`
+	Visits     int       `json:"visits"`
+	LastActive time.Time `json:"last_active"`
+}
+
+// DeviceDayStats represents detailed daily usage record for a single device
+type DeviceDayStats struct {
+	Date          string                        `json:"date"` // "YYYY-MM-DD"
+	MAC           string                        `json:"mac"`
+	IP            string                        `json:"ip"`
+	Hostname      string                        `json:"hostname"`
+	MemberID      string                        `json:"member_id,omitempty"`
+	UsedMinutes   int                           `json:"used_minutes"`
+	RxBytes       uint64                        `json:"rx_bytes"`
+	TxBytes       uint64                        `json:"tx_bytes"`
+	HourlyMinutes [24]int                       `json:"hourly_minutes"` // Minutes used in each hour 0-23
+	Categories    map[string]*CategoryUsageStat `json:"categories"`     // Key: ClassName
+	TopApps       []*AppUsageStat               `json:"top_apps"`
+}
+
+// HistoricalDayRecord represents a condensed day summary for trend charts
+type HistoricalDayRecord struct {
+	Date        string `json:"date"` // "YYYY-MM-DD"
+	UsedMinutes int    `json:"used_minutes"`
+	RxBytes     uint64 `json:"rx_bytes"`
+	TxBytes     uint64 `json:"tx_bytes"`
+}
+
+// DeviceStatsDetail represents a full statistical profile for a device
+type DeviceStatsDetail struct {
+	MAC               string                 `json:"mac"`
+	Hostname          string                 `json:"hostname"`
+	Vendor            string                 `json:"vendor"`
+	Online            bool                   `json:"online"`
+	MemberID          string                 `json:"member_id,omitempty"`
+	MemberName        string                 `json:"member_name,omitempty"`
+	TodayStats        *DeviceDayStats        `json:"today_stats"`
+	History           []*HistoricalDayRecord `json:"history"` // Last N days (7, 30)
+	HourlyActivity    [24]int                `json:"hourly_activity"`
+	CategoryBreakdown []*CategoryUsageStat   `json:"category_breakdown"`
+	TopApps           []*AppUsageStat        `json:"top_apps"`
+}
+
+// DeviceDaySummary represents ranked device item in overview
+type DeviceDaySummary struct {
+	MAC         string `json:"mac"`
+	Hostname    string `json:"hostname"`
+	Vendor      string `json:"vendor"`
+	MemberID    string `json:"member_id,omitempty"`
+	MemberName  string `json:"member_name,omitempty"`
+	Online      bool   `json:"online"`
+	UsedMinutes int    `json:"used_minutes"`
+	TotalBytes  uint64 `json:"total_bytes"`
+	TopCategory string `json:"top_category"`
+}
+
+// StatsOverview represents high-level family/router usage dashboard metrics
+type StatsOverview struct {
+	Date                string              `json:"date"`
+	TotalOnlineMinutes  int                 `json:"total_online_minutes"`
+	TotalBytes          uint64              `json:"total_bytes"`
+	ActiveDeviceCount   int                 `json:"active_device_count"`
+	TopCategory         string              `json:"top_category"`
+	TopCategoryMinutes  int                 `json:"top_category_minutes"`
+	CategoryBreakdown   []*CategoryUsageStat `json:"category_breakdown"`
+	DeviceRankings      []DeviceDaySummary  `json:"device_rankings"`
+	HistoricalTrend7Day []*HistoricalDayRecord `json:"historical_trend_7day"`
+}
+
