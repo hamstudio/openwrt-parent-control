@@ -7,7 +7,7 @@ import (
 	"sync"
 )
 
-// FirewallManager 管理 iptables 规则与防火墙链
+// FirewallManager manages iptables rules and custom chains
 type FirewallManager struct {
 	mu           sync.Mutex
 	blockedMACs  map[string]bool
@@ -20,7 +20,7 @@ const (
 	ChainNatPre  = "PARENT_CONTROL_NAT_PRE"
 )
 
-// NewFirewallManager 创建防火墙管理器
+// NewFirewallManager creates a new FirewallManager instance
 func NewFirewallManager() *FirewallManager {
 	return &FirewallManager{
 		blockedMACs: make(map[string]bool),
@@ -29,56 +29,56 @@ func NewFirewallManager() *FirewallManager {
 	}
 }
 
-// Init 初始化并挂载自定义 iptables 规则链
+// Init initializes and mounts custom iptables rule chains
 func (fm *FirewallManager) Init() error {
 	fm.mu.Lock()
 	defer fm.mu.Unlock()
 
 	log.Println("[Firewall] Initializing parent control iptables chains...")
 
-	// 1. 创建并挂载 filter 表 FORWARD 链
+	// 1. Create and attach filter table FORWARD chain
 	fm.ensureCustomChain("filter", ChainForward, "FORWARD")
 
-	// 2. 创建并挂载 nat 表 PREROUTING 链
+	// 2. Create and attach nat table PREROUTING chain
 	fm.ensureCustomChain("nat", ChainNatPre, "PREROUTING")
 
-	// 3. 应用基础安全规则（DNS 重定向 + DoH/DoT 阻断）
+	// 3. Apply baseline security rules (DNS redirect + DoH/DoT blocking)
 	fm.applyBaseRules()
 
 	return nil
 }
 
-// ensureCustomChain 确保自定义链存在并挂载到主链顶部
+// ensureCustomChain ensures the custom chain exists and is inserted at the top of parent chain
 func (fm *FirewallManager) ensureCustomChain(table, chain, parentChain string) {
-	// 检查自定义链是否存在，不存在则创建
+	// Check if custom chain exists; create if not
 	_ = exec.Command("iptables", "-t", table, "-N", chain).Run()
 
-	// 检查是否已经在 parentChain 中引用
+	// Check if already referenced in parentChain
 	checkCmd := exec.Command("iptables", "-t", table, "-C", parentChain, "-j", chain)
 	if err := checkCmd.Run(); err != nil {
-		// 未挂载，将其插入到第一条
+		// Not attached, insert at position 1
 		_ = exec.Command("iptables", "-t", table, "-I", parentChain, "1", "-j", chain).Run()
 	}
 }
 
-// applyBaseRules 应用防绕过规则
+// applyBaseRules applies anti-bypass firewall rules
 func (fm *FirewallManager) applyBaseRules() {
-	// 清理链内规则
+	// Flush rules within custom chains
 	_ = exec.Command("iptables", "-t", "nat", "-F", ChainNatPre).Run()
 	_ = exec.Command("iptables", "-t", "filter", "-F", ChainForward).Run()
 
 	if fm.redirectDNS {
-		// 强制将所有发往外部的 DNS (UDP/TCP 53) 重定向到本地 53 端口
+		// Force all outbound DNS (UDP/TCP 53) redirected to local port 53
 		_ = exec.Command("iptables", "-t", "nat", "-A", ChainNatPre, "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-ports", "53").Run()
 		_ = exec.Command("iptables", "-t", "nat", "-A", ChainNatPre, "-p", "tcp", "--dport", "53", "-j", "REDIRECT", "--to-ports", "53").Run()
 	}
 
 	if fm.blockDoHDoT {
-		// 阻断 DoT (853)
+		// Block DoT (port 853)
 		_ = exec.Command("iptables", "-t", "filter", "-A", ChainForward, "-p", "tcp", "--dport", "853", "-j", "REJECT").Run()
 		_ = exec.Command("iptables", "-t", "filter", "-A", ChainForward, "-p", "udp", "--dport", "853", "-j", "REJECT").Run()
 
-		// 阻断主流知名公共 DoH 节点（防止私自加密 DNS 绕过）
+		// Block major public DoH server IPs (prevents bypassing local DNS filtering)
 		dohIPs := []string{
 			"1.1.1.1", "1.0.0.1", "8.8.8.8", "8.8.4.4",
 			"9.9.9.9", "149.112.112.112", "208.67.222.222", "208.67.220.220",
@@ -89,12 +89,12 @@ func (fm *FirewallManager) applyBaseRules() {
 	}
 }
 
-// SyncBlockedMACs 同步当前需要完全切断网络的 MAC 列表
+// SyncBlockedMACs synchronizes the list of MAC addresses that should be completely blocked
 func (fm *FirewallManager) SyncBlockedMACs(macs []string) error {
 	fm.mu.Lock()
 	defer fm.mu.Unlock()
 
-	// 清理现有的阻断规则并重新构建
+	// Flush existing block rules and rebuild baseline
 	fm.applyBaseRules()
 
 	fm.blockedMACs = make(map[string]bool)
@@ -105,7 +105,7 @@ func (fm *FirewallManager) SyncBlockedMACs(macs []string) error {
 		}
 		fm.blockedMACs[mac] = true
 
-		// 针对该 MAC 添加 DROP 规则
+		// Add DROP rule for this MAC
 		cmd := exec.Command("iptables", "-t", "filter", "-A", ChainForward, "-m", "mac", "--mac-source", mac, "-j", "DROP")
 		if out, err := cmd.CombinedOutput(); err != nil {
 			log.Printf("[Firewall] Failed to block MAC %s: %v, output: %s", mac, err, string(out))
@@ -116,16 +116,16 @@ func (fm *FirewallManager) SyncBlockedMACs(macs []string) error {
 	return nil
 }
 
-// Cleanup 清理所有 parent control 规则
+// Cleanup removes all parent control firewall rules and chains
 func (fm *FirewallManager) Cleanup() {
 	fm.mu.Lock()
 	defer fm.mu.Unlock()
 
-	// 从主链中移除引用
+	// Remove references from main chains
 	_ = exec.Command("iptables", "-t", "filter", "-D", "FORWARD", "-j", ChainForward).Run()
 	_ = exec.Command("iptables", "-t", "nat", "-D", "PREROUTING", "-j", ChainNatPre).Run()
 
-	// 清空并删除自定义链
+	// Flush and delete custom chains
 	_ = exec.Command("iptables", "-t", "filter", "-F", ChainForward).Run()
 	_ = exec.Command("iptables", "-t", "filter", "-X", ChainForward).Run()
 

@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  parentcontrol-relay:
+    build:
+      context: ../..
+      dockerfile: cloud/relay-server/Dockerfile
+    container_name: parentcontrol-relay
+    restart: always
+    ports:
+      - "9000:9000"
+    environment:
+      - PORT=9000
+      - RELAY_SECRET=your_custom_secure_secret_here
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:9000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

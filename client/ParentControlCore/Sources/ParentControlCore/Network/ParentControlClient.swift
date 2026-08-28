@@ -10,15 +10,18 @@ public enum ParentControlError: LocalizedError, Sendable {
     public var errorDescription: String? {
         switch self {
         case .invalidURL:
-            return "无效的路由器服务器地址"
+            return "Invalid router server URL"
         case .networkError(let msg):
-            return "网络连接失败: \(msg)"
+            return "Network connection failed: \(msg)"
         case .serverError(let code):
-            return "路由器返回错误状态码: \(code)"
+            if code == 401 {
+                return "PIN verification failed or not provided (401)"
+            }
+            return "Router returned error status code: \(code)"
         case .decodingError(let msg):
-            return "数据解析失败: \(msg)"
+            return "Data decoding failed: \(msg)"
         case .actionFailed(let msg):
-            return "操作失败: \(msg)"
+            return "Operation failed: \(msg)"
         }
     }
 }
@@ -28,10 +31,18 @@ public actor ParentControlClient {
     private var pinCode: String?
     private let session: URLSession
 
-    public init(baseURLString: String = "http://192.168.0.110:8088", pinCode: String? = nil, session: URLSession = .shared) {
+    public init(baseURLString: String = "http://192.168.0.110:8088", pinCode: String? = nil, session: URLSession? = nil) {
         self.baseURL = URL(string: baseURLString) ?? URL(string: "http://192.168.0.110:8088")!
         self.pinCode = pinCode
-        self.session = session
+        if let session = session {
+            self.session = session
+        } else {
+            let config = URLSessionConfiguration.default
+            config.waitsForConnectivity = false
+            config.timeoutIntervalForRequest = 4.0
+            config.timeoutIntervalForResource = 8.0
+            self.session = URLSession(configuration: config)
+        }
     }
 
     public func updateBaseURL(_ newURLString: String) {
@@ -58,6 +69,22 @@ public actor ParentControlClient {
         return try await get(endpoint: "/api/devices")
     }
 
+    public func lockDevice(mac: String) async throws {
+        let endpoint = "/api/devices/\(mac)/lock"
+        let _: [String: String] = try await postEmpty(endpoint: endpoint)
+    }
+
+    public func unlockDevice(mac: String) async throws {
+        let endpoint = "/api/devices/\(mac)/unlock"
+        let _: [String: String] = try await postEmpty(endpoint: endpoint)
+    }
+
+    public func assignDevice(mac: String, memberId: String?) async throws {
+        let endpoint = "/api/devices/\(mac)/assign"
+        let body = ["member_id": memberId ?? ""]
+        let _: [String: String] = try await post(endpoint: endpoint, body: body)
+    }
+
     // MARK: - App Categories & Apps CRUD
     public func fetchAppCategories() async throws -> [AppCategory] {
         return try await get(endpoint: "/api/apps")
@@ -79,6 +106,7 @@ public actor ParentControlClient {
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
         request.timeoutInterval = 5
+        applyAuthHeaders(to: &request)
 
         let (data, response) = try await session.data(for: request)
         guard let httpRes = response as? HTTPURLResponse, (200...299).contains(httpRes.statusCode) else {
@@ -100,6 +128,7 @@ public actor ParentControlClient {
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
         request.timeoutInterval = 5
+        applyAuthHeaders(to: &request)
 
         let (data, response) = try await session.data(for: request)
         guard let httpRes = response as? HTTPURLResponse, (200...299).contains(httpRes.statusCode) else {
@@ -126,9 +155,7 @@ public actor ParentControlClient {
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
         request.timeoutInterval = 5
-        if let pin = pinCode, !pin.isEmpty {
-            request.setValue(pin, forHTTPHeaderField: "X-Pin-Code")
-        }
+        applyAuthHeaders(to: &request)
 
         let (data, response) = try await session.data(for: request)
         guard let httpRes = response as? HTTPURLResponse, (200...299).contains(httpRes.statusCode) else {
@@ -163,6 +190,13 @@ public actor ParentControlClient {
     }
 
     // MARK: - Internal HTTP Helpers
+    private func applyAuthHeaders(to request: inout URLRequest) {
+        if let pin = pinCode, !pin.isEmpty {
+            request.setValue(pin, forHTTPHeaderField: "X-Pin-Code")
+            request.setValue("Bearer \(pin)", forHTTPHeaderField: "Authorization")
+        }
+    }
+
     private func get<T: Decodable>(endpoint: String) async throws -> T {
         guard let url = URL(string: endpoint, relativeTo: baseURL) else {
             throw ParentControlError.invalidURL
@@ -170,9 +204,7 @@ public actor ParentControlClient {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.timeoutInterval = 5
-        if let pin = pinCode, !pin.isEmpty {
-            request.setValue(pin, forHTTPHeaderField: "X-Pin-Code")
-        }
+        applyAuthHeaders(to: &request)
 
         do {
             let (data, response) = try await session.data(for: request)
@@ -196,9 +228,7 @@ public actor ParentControlClient {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 5
-        if let pin = pinCode, !pin.isEmpty {
-            request.setValue(pin, forHTTPHeaderField: "X-Pin-Code")
-        }
+        applyAuthHeaders(to: &request)
 
         do {
             request.httpBody = try JSONEncoder().encode(body)
@@ -222,9 +252,7 @@ public actor ParentControlClient {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.timeoutInterval = 5
-        if let pin = pinCode, !pin.isEmpty {
-            request.setValue(pin, forHTTPHeaderField: "X-Pin-Code")
-        }
+        applyAuthHeaders(to: &request)
 
         do {
             let (data, response) = try await session.data(for: request)

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# OpenWrt .ipk 一键打包发布脚本
+# OpenWrt .ipk build and packaging script
 set -e
 
 ARCH="${1:-x86_64}"
@@ -8,10 +8,10 @@ PKG_NAME="luci-app-parentcontrol"
 OUTPUT_DIR="dist"
 
 echo "=================================================="
-echo "  正在打包 OpenWrt 插件: ${PKG_NAME}_${VERSION}_${ARCH}.ipk"
+echo "  Packaging OpenWrt Package: ${PKG_NAME}_${VERSION}_${ARCH}.ipk"
 echo "=================================================="
 
-# 1. 确定 Go 编译目标架构
+# 1. Determine Go target architecture
 case "$ARCH" in
   x86_64)
     GOARCH="amd64"
@@ -50,12 +50,12 @@ mkdir -p "${DATA_DIR}/www/luci-static/resources/view/parentcontrol"
 mkdir -p "${CONTROL_DIR}"
 mkdir -p "${OUTPUT_DIR}"
 
-# 2. 编译 Go 守护进程
-echo "[1/4] 编译 Go 后端守护进程 (${GOARCH})..."
+# 2. Build Go daemon binary
+echo "[1/4] Building Go daemon binary (${GOARCH})..."
 CGO_ENABLED=0 GOOS=linux GOARCH=${GOARCH} GOARM=${GOARM} go build -trimpath -ldflags="-s -w" -o "${DATA_DIR}/usr/bin/parentcontrold" ./cmd/parentcontrold
 
-# 3. 复制 rootfs 资源与 LuCI 前端
-echo "[2/4] 组装 rootfs 文件与 LuCI 界面..."
+# 3. Copy rootfs resources and LuCI frontend
+echo "[2/4] Assembling rootfs files and LuCI interface..."
 cp rootfs/etc/init.d/parentcontrol "${DATA_DIR}/etc/init.d/parentcontrol"
 chmod 755 "${DATA_DIR}/etc/init.d/parentcontrol"
 
@@ -63,8 +63,8 @@ cp rootfs/usr/share/luci/menu.d/luci-app-parentcontrol.json "${DATA_DIR}/usr/sha
 cp rootfs/usr/share/rpcd/acl.d/luci-app-parentcontrol.json "${DATA_DIR}/usr/share/rpcd/acl.d/"
 cp rootfs/www/luci-static/resources/view/parentcontrol/overview.js "${DATA_DIR}/www/luci-static/resources/view/parentcontrol/"
 
-# 4. 生成 control 元数据与安装控制脚本
-echo "[3/4] 生成 opkg control 元数据..."
+# 4. Generate opkg control metadata and installation scripts
+echo "[3/4] Generating opkg control metadata..."
 cat > "${CONTROL_DIR}/control" <<EOF
 Package: ${PKG_NAME}
 Version: ${VERSION}
@@ -98,8 +98,8 @@ exit 0
 EOF
 chmod 755 "${CONTROL_DIR}/prerm"
 
-# 5. 打包成标准 .ipk (使用 ustar 格式兼容 OpenWrt busybox tar)
-echo "[4/4] 压制 .ipk 安装包..."
+# 5. Package as standard .ipk (using ustar format compatible with OpenWrt busybox tar)
+echo "[4/4] Building .ipk package archive..."
 echo "2.0" > "${WORK_DIR}/debian-binary"
 
 export COPYFILE_DISABLE=1
@@ -109,13 +109,13 @@ export COPYFILE_DISABLE=1
 IPK_FILE="${OUTPUT_DIR}/${PKG_NAME}_${VERSION}_${ARCH}.ipk"
 (cd "${WORK_DIR}" && tar --format=ustar -czf "${OLDPWD}/${IPK_FILE}" ./debian-binary ./control.tar.gz ./data.tar.gz)
 
-# 清理临时目录
+# Cleanup temporary directory
 rm -rf "${WORK_DIR}"
 
 echo "=================================================="
-echo "✅ 打包完成！输出文件:"
+echo "✅ Build completed successfully! Output file:"
 echo "   -> ${IPK_FILE} ($(du -h "${IPK_FILE}" | awk '{print $1}'))"
 echo "=================================================="
-echo "在路由器上安装方式:"
+echo "To install on router:"
 echo "   opkg install ${IPK_FILE}"
 echo "=================================================="

@@ -16,8 +16,25 @@ public final class AppState: ObservableObject {
         }
     }
 
+    @Published public var pinCode: String {
+        didSet {
+            UserDefaults.standard.set(pinCode, forKey: "parentcontrol_pin_code")
+            Task {
+                await client.setPinCode(pinCode.isEmpty ? nil : pinCode)
+                await refreshAll()
+            }
+        }
+    }
+
+    @Published public var appLanguage: String {
+        didSet {
+            I18n.shared.setLocale(appLanguage)
+        }
+    }
+
     @Published public var isConnected: Bool = false
     @Published public var isRefreshing: Bool = false
+    @Published public var needsPinAuth: Bool = false
     @Published public var status: SystemStatus?
     @Published public var members: [Member] = []
     @Published public var devices: [Device] = []
@@ -30,14 +47,23 @@ public final class AppState: ObservableObject {
 
     public init(initialURL: String = "http://192.168.0.110:8088") {
         let savedURL = UserDefaults.standard.string(forKey: "parentcontrol_server_url") ?? initialURL
+        let savedPin = UserDefaults.standard.string(forKey: "parentcontrol_pin_code") ?? ""
+        let savedLang = UserDefaults.standard.string(forKey: "parentcontrol_app_lang") ?? "auto"
         self.serverURL = savedURL
-        self.client = ParentControlClient(baseURLString: savedURL)
+        self.pinCode = savedPin
+        self.appLanguage = savedLang
+        self.client = ParentControlClient(baseURLString: savedURL, pinCode: savedPin.isEmpty ? nil : savedPin)
+        I18n.shared.setLocale(savedLang)
     }
 
     // MARK: - Lifecycle
     public func startAutoRefresh() {
         Task {
             await refreshAll()
+            // Auto discover router if default address fails
+            if !self.isConnected {
+                await autoDiscover()
+            }
         }
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
@@ -52,26 +78,50 @@ public final class AppState: ObservableObject {
         timer = nil
     }
 
+    public func setPin(_ newPin: String) {
+        self.pinCode = newPin
+    }
+
     // MARK: - Actions
     public func refreshAll() async {
         isRefreshing = true
         errorMessage = nil
 
         do {
-            async let s = client.fetchStatus()
+            // 1. Fetch public status endpoint
+            let currentStatus = try await client.fetchStatus()
+            self.status = currentStatus
+            self.isConnected = true
+
+            // 2. Check if PIN authentication is required
+            if currentStatus.pinRequired == true && self.pinCode.isEmpty {
+                self.needsPinAuth = true
+                self.errorMessage = "Router PIN protection is enabled. Please enter PIN to load data"
+                self.isRefreshing = false
+                return
+            }
+
+            // 3. Concurrently fetch protected endpoints
             async let m = client.fetchMembers()
             async let d = client.fetchDevices()
             async let c = client.fetchAppCategories()
             async let set = client.fetchSettings()
 
-            let (resStatus, resMembers, resDevices, resCategories, resSettings) = try await (s, m, d, c, set)
+            let (resMembers, resDevices, resCategories, resSettings) = try await (m, d, c, set)
 
-            self.status = resStatus
             self.members = resMembers
             self.devices = resDevices
             self.categories = resCategories
             self.settings = resSettings
-            self.isConnected = true
+            self.needsPinAuth = false
+        } catch let err as ParentControlError {
+            if case .serverError(let code) = err, code == 401 {
+                self.needsPinAuth = true
+                self.errorMessage = "Incorrect PIN or unauthorized (401), please try again"
+            } else {
+                self.isConnected = false
+                self.errorMessage = err.localizedDescription
+            }
         } catch {
             self.isConnected = false
             self.errorMessage = error.localizedDescription
@@ -81,6 +131,8 @@ public final class AppState: ObservableObject {
     }
 
     public func refreshLightweight() async {
+        guard isConnected && !needsPinAuth else { return }
+
         do {
             async let s = client.fetchStatus()
             async let m = client.fetchMembers()
@@ -92,8 +144,12 @@ public final class AppState: ObservableObject {
             self.members = resMembers
             self.devices = resDevices
             self.isConnected = true
+        } catch let err as ParentControlError {
+            if case .serverError(let code) = err, code == 401 {
+                self.needsPinAuth = true
+            }
         } catch {
-            self.isConnected = false
+            // Keep previous state to avoid UI flashing
         }
     }
 
@@ -110,7 +166,7 @@ public final class AppState: ObservableObject {
             try await client.lockMember(id: id)
             await refreshLightweight()
         } catch {
-            self.errorMessage = "锁定失败: \(error.localizedDescription)"
+            self.errorMessage = "Lock member failed: \(error.localizedDescription)"
         }
     }
 
@@ -119,7 +175,7 @@ public final class AppState: ObservableObject {
             try await client.unlockMember(id: id)
             await refreshLightweight()
         } catch {
-            self.errorMessage = "解锁失败: \(error.localizedDescription)"
+            self.errorMessage = "Unlock member failed: \(error.localizedDescription)"
         }
     }
 
@@ -128,7 +184,36 @@ public final class AppState: ObservableObject {
             try await client.bonusMember(id: id, minutes: minutes)
             await refreshLightweight()
         } catch {
-            self.errorMessage = "加时失败: \(error.localizedDescription)"
+            self.errorMessage = "Grant bonus failed: \(error.localizedDescription)"
+        }
+    }
+
+    public func lockDevice(mac: String) async {
+        do {
+            try await client.lockDevice(mac: mac)
+            await refreshAll()
+        } catch {
+            self.errorMessage = "Block device failed: \(error.localizedDescription)"
+        }
+    }
+
+    public func unlockDevice(mac: String) async {
+        do {
+            try await client.unlockDevice(mac: mac)
+            await refreshAll()
+        } catch {
+            self.errorMessage = "Unblock device failed: \(error.localizedDescription)"
+        }
+    }
+
+    public func assignDevice(mac: String, memberId: String?) async -> Bool {
+        do {
+            try await client.assignDevice(mac: mac, memberId: memberId)
+            await refreshAll()
+            return true
+        } catch {
+            self.errorMessage = "Assign device failed: \(error.localizedDescription)"
+            return false
         }
     }
 
@@ -138,7 +223,7 @@ public final class AppState: ObservableObject {
             await refreshAll()
             return true
         } catch {
-            self.errorMessage = "保存失败: \(error.localizedDescription)"
+            self.errorMessage = "Save member failed: \(error.localizedDescription)"
             return false
         }
     }
@@ -148,7 +233,7 @@ public final class AppState: ObservableObject {
             try await client.deleteMember(id: id)
             await refreshAll()
         } catch {
-            self.errorMessage = "删除失败: \(error.localizedDescription)"
+            self.errorMessage = "Delete member failed: \(error.localizedDescription)"
         }
     }
 
@@ -157,7 +242,7 @@ public final class AppState: ObservableObject {
             self.settings = try await client.saveSettings(newSettings)
             return true
         } catch {
-            self.errorMessage = "保存设置失败: \(error.localizedDescription)"
+            self.errorMessage = "Save settings failed: \(error.localizedDescription)"
             return false
         }
     }
@@ -168,7 +253,7 @@ public final class AppState: ObservableObject {
             await refreshAll()
             return true
         } catch {
-            self.errorMessage = "创建应用失败: \(error.localizedDescription)"
+            self.errorMessage = "Create app failed: \(error.localizedDescription)"
             return false
         }
     }
@@ -179,7 +264,7 @@ public final class AppState: ObservableObject {
             await refreshAll()
             return true
         } catch {
-            self.errorMessage = "更新应用失败: \(error.localizedDescription)"
+            self.errorMessage = "Update app failed: \(error.localizedDescription)"
             return false
         }
     }
@@ -189,7 +274,7 @@ public final class AppState: ObservableObject {
             try await client.deleteApp(id: id)
             await refreshAll()
         } catch {
-            self.errorMessage = "删除应用失败: \(error.localizedDescription)"
+            self.errorMessage = "Delete app failed: \(error.localizedDescription)"
         }
     }
 
@@ -199,7 +284,7 @@ public final class AppState: ObservableObject {
             await refreshAll()
             return true
         } catch {
-            self.errorMessage = "创建分类失败: \(error.localizedDescription)"
+            self.errorMessage = "Create category failed: \(error.localizedDescription)"
             return false
         }
     }
@@ -209,7 +294,7 @@ public final class AppState: ObservableObject {
             try await client.deleteCategory(id: id)
             await refreshAll()
         } catch {
-            self.errorMessage = "删除分类失败: \(error.localizedDescription)"
+            self.errorMessage = "Delete category failed: \(error.localizedDescription)"
         }
     }
 }

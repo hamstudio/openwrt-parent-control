@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">家長控制</string>
+    <string name="dashboard_title">控制台</string>
+    <string name="devices_title">設備列表</string>
+    <string name="settings_title">設置</string>
+</resources>

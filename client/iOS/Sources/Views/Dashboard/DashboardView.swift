@@ -3,19 +3,27 @@ import ParentControlCore
 
 struct DashboardView: View {
     @EnvironmentObject var appState: AppState
+    @ObservedObject var i18n = I18n.shared
+
     @State private var showingAddSheet = false
+    @State private var inputPin = ""
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    // 连接状态与指标概览
+                    // Connection Status and Metric Overview
                     metricsHeader
 
-                    // 成员卡片列表
-                    if appState.members.isEmpty {
+                    // PIN Authentication Banner
+                    if appState.needsPinAuth {
+                        pinAuthBanner
+                    }
+
+                    // Member Card List
+                    if appState.members.isEmpty && !appState.needsPinAuth {
                         emptyStateView
-                    } else {
+                    } else if !appState.members.isEmpty {
                         LazyVStack(spacing: 14) {
                             ForEach(appState.members) { member in
                                 MemberCardView(member: member)
@@ -26,7 +34,7 @@ struct DashboardView: View {
                 .padding()
             }
             .background(Color.adaptiveGroupedBackground)
-            .navigationTitle("绿色健康守护中心")
+            .navigationTitle(i18n.t("appTitle"))
             .toolbar {
                 ToolbarItem(placement: .automatic) {
                     Button {
@@ -48,15 +56,57 @@ struct DashboardView: View {
         }
     }
 
+    private var pinAuthBanner: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Image(systemName: "lock.shield.fill")
+                    .foregroundColor(.orange)
+                    .font(.title2)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(i18n.t("pinRequiredTitle"))
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    Text(i18n.t("pinRequiredDesc"))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            HStack {
+                SecureField(i18n.t("pinPlaceholder"), text: $inputPin)
+                    .textFieldStyle(.roundedBorder)
+                    .keyboardType(.numberPad)
+
+                Button(i18n.t("btnVerify")) {
+                    appState.pinCode = inputPin
+                    HapticManager.impact(.medium)
+                }
+                .bold()
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(Color.guardianGreen)
+                .foregroundColor(.white)
+                .cornerRadius(8)
+            }
+        }
+        .padding(14)
+        .background(Color.adaptiveBackground)
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.orange.opacity(0.4), lineWidth: 1.5)
+        )
+    }
+
     private var metricsHeader: some View {
         VStack(spacing: 12) {
-            // 路由器连接状态指示条
+            // Router Connection Status Indicator
             HStack {
                 Circle()
                     .fill(appState.isConnected ? Color.guardianGreen : Color.red)
                     .frame(width: 8, height: 8)
 
-                Text(appState.isConnected ? "已直连路由器 (\(appState.serverURL))" : "未连接至路由器")
+                Text(appState.isConnected ? "\(i18n.t("connectedTo")) (\(appState.serverURL))" : i18n.t("notConnected"))
                     .font(.caption.bold())
                     .foregroundColor(appState.isConnected ? .secondary : .red)
 
@@ -67,7 +117,7 @@ struct DashboardView: View {
                         Image(systemName: "checkmark.shield.fill")
                             .foregroundColor(.guardianGreen)
                             .font(.caption2)
-                        Text("DPI 就绪")
+                        Text(i18n.t("dpiReady"))
                             .font(.caption2.bold())
                             .foregroundColor(.guardianGreen)
                     }
@@ -78,23 +128,23 @@ struct DashboardView: View {
                 }
             }
 
-            // 统计卡片网格
+            // Statistics Metric Tiles Grid
             HStack(spacing: 12) {
                 MetricTile(
-                    title: "受管成员",
+                    title: i18n.t("statMembers"),
                     value: "\(appState.members.count)",
                     icon: "person.2.fill",
                     tint: .guardianGreen
                 )
                 MetricTile(
-                    title: "受管设备",
+                    title: i18n.t("statDevices"),
                     value: "\(appState.status?.activeDevices ?? 0) / \(appState.status?.totalDevices ?? 0)",
                     icon: "laptopcomputer.and.iphone",
                     tint: .teal
                 )
                 MetricTile(
-                    title: "App 特征库",
-                    value: "\(appState.status?.appCount ?? 0) 款",
+                    title: i18n.t("statApps"),
+                    value: "\(appState.status?.appCount ?? 0)",
                     icon: "square.grid.2x2.fill",
                     tint: .emerald
                 )
@@ -113,10 +163,10 @@ struct DashboardView: View {
                 .foregroundColor(.guardianGreen.opacity(0.8))
                 .padding(.top, 40)
 
-            Text("暂无受管家庭成员")
+            Text(i18n.t("emptyMembersTitle"))
                 .font(.headline)
 
-            Text("点击下方按钮添加孩子的手机、平板或电脑，开启多时段健康上网与 App 管控。")
+            Text(i18n.t("emptyMembersDesc"))
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -126,7 +176,7 @@ struct DashboardView: View {
                 showingAddSheet = true
                 HapticManager.impact(.medium)
             } label: {
-                Label("添加受管成员", systemImage: "plus.circle.fill")
+                Label(i18n.t("addMemberBtn"), systemImage: "plus.circle.fill")
                     .font(.headline)
                     .foregroundColor(.white)
                     .padding(.horizontal, 24)

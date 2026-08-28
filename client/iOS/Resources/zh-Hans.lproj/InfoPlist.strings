@@ -1,0 +1,4 @@
+/* 简体中文 InfoPlist.strings */
+"CFBundleDisplayName" = "家长控制";
+"CFBundleName" = "家长控制";
+"NSLocalNetworkUsageDescription" = "家长控制需要访问局域网以发现并连接您的路由器设备";

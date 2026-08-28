@@ -15,7 +15,7 @@ import (
 	"parentcontrol/internal/models"
 )
 
-// DPIManager 管理深度应用识别与拦截
+// DPIManager manages Deep Packet Inspection (DPI) app identification and blocking
 type DPIManager struct {
 	mu             sync.RWMutex
 	featurePath    string
@@ -28,7 +28,7 @@ type DPIManager struct {
 	isOAFInstalled bool
 }
 
-// NewDPIManager 初始化 DPI 管理器
+// NewDPIManager initializes a new DPIManager instance
 func NewDPIManager(featurePath string) *DPIManager {
 	if featurePath == "" {
 		featurePath = "/etc/appfilter/feature_cn.cfg"
@@ -46,12 +46,12 @@ func NewDPIManager(featurePath string) *DPIManager {
 	return mgr
 }
 
-// Init 初始化内核模块与特征库
+// Init initializes the kernel module and loads the feature database
 func (m *DPIManager) Init() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// 1. 检查并尝试加载 kmod-oaf
+	// 1. Check and attempt to load kmod-oaf
 	if _, err := os.Stat("/dev/appfilter"); os.IsNotExist(err) {
 		log.Println("[DPI] /dev/appfilter not found, preparing feature file and loading oaf module...")
 		_ = os.Remove("/tmp/feature.cfg")
@@ -70,18 +70,18 @@ func (m *DPIManager) Init() {
 		log.Printf("[DPI] WARNING: kmod-oaf device /dev/appfilter not accessible: %v", err)
 	}
 
-	// 2. 加载特征库
+	// 2. Load feature database
 	m.loadFeatures()
 }
 
-// IsReady 检查 DPI 模块是否就绪
+// IsReady checks if the DPI kernel module is ready
 func (m *DPIManager) IsReady() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.isOAFInstalled
 }
 
-// loadFeatures 从配置文件解析应用特征与分类
+// loadFeatures parses application signatures and categories from feature configuration
 func (m *DPIManager) loadFeatures() {
 	file, err := os.Open(m.featurePath)
 	if err != nil {
@@ -101,7 +101,7 @@ func (m *DPIManager) loadFeatures() {
 			continue
 		}
 
-		// 分类行: #class chat 1 聊天
+		// Category line: #class chat 1 Chat
 		if strings.HasPrefix(line, "#class") {
 			fields := strings.Fields(line)
 			if len(fields) >= 4 {
@@ -121,7 +121,7 @@ func (m *DPIManager) loadFeatures() {
 			continue
 		}
 
-		// 应用行: 1001 QQ:[tcp;;;;;00:02|-1:03...]
+		// App signature line: 1001 QQ:[tcp;;;;;00:02|-1:03...]
 		parts := strings.SplitN(line, ":", 2)
 		if len(parts) >= 1 {
 			idName := strings.TrimSpace(parts[0])
@@ -157,7 +157,7 @@ func (m *DPIManager) loadFeatures() {
 		}
 	}
 
-	// 整理分类切片
+	// Organize categories slice
 	m.categories = make([]models.AppCategory, 0, len(categoriesMap))
 	for _, cat := range categoriesMap {
 		m.categories = append(m.categories, *cat)
@@ -189,7 +189,7 @@ func getCategoryIcon(className string) string {
 	}
 }
 
-// loadFallbackFeatures 内置降级基础特征
+// loadFallbackFeatures provides built-in fallback signatures when feature file is missing
 func (m *DPIManager) loadFallbackFeatures() {
 	gameCat := models.AppCategory{
 		ClassID:   2,
@@ -245,7 +245,7 @@ func (m *DPIManager) loadFallbackFeatures() {
 	}
 }
 
-// LoadCustomData 载入持久化的自定义应用与分类
+// LoadCustomData loads persisted custom apps and categories
 func (m *DPIManager) LoadCustomData(apps []models.AppInfo, cats []models.AppCategory) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -270,7 +270,7 @@ func (m *DPIManager) LoadCustomData(apps []models.AppInfo, cats []models.AppCate
 	m.rebuildCategoriesLocked()
 }
 
-// GetCustomData 获取用户自定义的应用与分类
+// GetCustomData retrieves user-defined custom apps and categories
 func (m *DPIManager) GetCustomData() ([]models.AppInfo, []models.AppCategory) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -287,18 +287,18 @@ func (m *DPIManager) GetCustomData() ([]models.AppInfo, []models.AppCategory) {
 	return apps, cats
 }
 
-// rebuildCategoriesLocked 重构 categories 切片（必须在持锁状态下调用）
+// rebuildCategoriesLocked rebuilds the categories slice (must be called with lock held)
 func (m *DPIManager) rebuildCategoriesLocked() {
 	catMap := make(map[int]*models.AppCategory)
 
-	// 1. 先加入已有基础分类
+	// 1. Add base categories
 	for i := range m.categories {
 		cat := m.categories[i]
 		cat.Apps = make([]models.AppInfo, 0)
 		catMap[cat.ClassID] = &cat
 	}
 
-	// 2. 加入自定义分类
+	// 2. Add custom categories
 	for _, c := range m.customCats {
 		if _, exists := catMap[c.ClassID]; !exists {
 			cp := c
@@ -307,11 +307,11 @@ func (m *DPIManager) rebuildCategoriesLocked() {
 		}
 	}
 
-	// 3. 将所有 app 归纳进分类
+	// 3. Classify all apps into categories
 	for _, app := range m.appMap {
 		cat, ok := catMap[app.ClassID]
 		if !ok {
-			// 没有找到对应分类，默认放入其他分类
+			// Fallback to "other" category if not found
 			otherCat, exists := catMap[99]
 			if !exists {
 				other := models.AppCategory{
@@ -335,7 +335,7 @@ func (m *DPIManager) rebuildCategoriesLocked() {
 		cat.Apps = append(cat.Apps, app)
 	}
 
-	// 4. 排序分类及分类内的 App
+	// 4. Sort categories and their apps
 	result := make([]models.AppCategory, 0, len(catMap))
 	for _, cat := range catMap {
 		sort.Slice(cat.Apps, func(i, j int) bool {
@@ -350,14 +350,14 @@ func (m *DPIManager) rebuildCategoriesLocked() {
 	m.categories = result
 }
 
-// GetCategories 获取所有分类与 App
+// GetCategories returns all categories and apps
 func (m *DPIManager) GetCategories() []models.AppCategory {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.categories
 }
 
-// GetAllApps 获取所有 App 的平面列表
+// GetAllApps returns a flattened list of all apps
 func (m *DPIManager) GetAllApps() []models.AppInfo {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -371,7 +371,7 @@ func (m *DPIManager) GetAllApps() []models.AppInfo {
 	return apps
 }
 
-// GetApp 获取指定 App
+// GetApp returns a single app by ID
 func (m *DPIManager) GetApp(id int) (models.AppInfo, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -379,7 +379,7 @@ func (m *DPIManager) GetApp(id int) (models.AppInfo, bool) {
 	return app, ok
 }
 
-// AddApp 新增受限 App
+// AddApp adds a new managed app
 func (m *DPIManager) AddApp(app models.AppInfo) (models.AppInfo, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -388,7 +388,7 @@ func (m *DPIManager) AddApp(app models.AppInfo) (models.AppInfo, error) {
 		return app, fmt.Errorf("app name cannot be empty")
 	}
 
-	// 若未指定 ID 或 ID 冲突，自动生成一个自定义 ID (> 5000)
+	// If ID not specified or conflicts, generate an auto ID (> 5000)
 	if app.ID <= 0 || m.appMap[app.ID].ID != 0 {
 		maxID := 5000
 		for id := range m.appMap {
@@ -399,9 +399,9 @@ func (m *DPIManager) AddApp(app models.AppInfo) (models.AppInfo, error) {
 		app.ID = maxID
 	}
 
-	// 查找分类名称
+	// Lookup category name
 	if app.ClassID <= 0 {
-		app.ClassID = 2 // 默认游戏
+		app.ClassID = 2 // Default game
 	}
 	for _, cat := range m.categories {
 		if cat.ClassID == app.ClassID {
@@ -411,7 +411,7 @@ func (m *DPIManager) AddApp(app models.AppInfo) (models.AppInfo, error) {
 		}
 	}
 	if app.ClassZh == "" {
-		app.ClassZh = "自定义"
+		app.ClassZh = "Custom"
 		app.ClassName = "custom"
 	}
 
@@ -424,7 +424,7 @@ func (m *DPIManager) AddApp(app models.AppInfo) (models.AppInfo, error) {
 	return app, nil
 }
 
-// UpdateApp 更新 App 信息
+// UpdateApp updates existing app information
 func (m *DPIManager) UpdateApp(id int, updated models.AppInfo) (models.AppInfo, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -460,7 +460,7 @@ func (m *DPIManager) UpdateApp(id int, updated models.AppInfo) (models.AppInfo, 
 	return existing, nil
 }
 
-// DeleteApp 删除 App
+// DeleteApp removes an app by ID
 func (m *DPIManager) DeleteApp(id int) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -477,13 +477,16 @@ func (m *DPIManager) DeleteApp(id int) error {
 	return nil
 }
 
-// AddCategory 新增应用分类
+// AddCategory adds a new app category
 func (m *DPIManager) AddCategory(cat models.AppCategory) (models.AppCategory, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if strings.TrimSpace(cat.ClassZh) == "" && strings.TrimSpace(cat.ClassName) == "" {
+		return cat, fmt.Errorf("category name cannot be empty")
+	}
 	if strings.TrimSpace(cat.ClassZh) == "" {
-		return cat, fmt.Errorf("category Chinese name cannot be empty")
+		cat.ClassZh = cat.ClassName
 	}
 
 	if cat.ClassID <= 0 {
@@ -512,13 +515,13 @@ func (m *DPIManager) AddCategory(cat models.AppCategory) (models.AppCategory, er
 	return cat, nil
 }
 
-// DeleteCategory 删除分类
+// DeleteCategory removes an app category by ID
 func (m *DPIManager) DeleteCategory(classID int) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	delete(m.customCats, classID)
-	// 将属于该分类的 App 归入其他
+	// Reassign apps belonging to this category to "other"
 	for id, app := range m.appMap {
 		if app.ClassID == classID {
 			app.ClassID = 99
@@ -536,7 +539,7 @@ func (m *DPIManager) DeleteCategory(classID int) error {
 	return nil
 }
 
-// ApplyRules 应用封禁应用 ID 列表与受管 MAC 列表至内核
+// ApplyRules applies blocked App IDs and managed MACs to the kernel
 func (m *DPIManager) ApplyRules(appIDs []int, macList []string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -546,7 +549,7 @@ func (m *DPIManager) ApplyRules(appIDs []int, macList []string) error {
 		return nil
 	}
 
-	// 1. 清空旧规则: op 3
+	// 1. Clear previous rules: op 3
 	if err := m.sendOAFCommand(map[string]interface{}{
 		"op":   3,
 		"data": map[string]interface{}{},
@@ -554,13 +557,13 @@ func (m *DPIManager) ApplyRules(appIDs []int, macList []string) error {
 		log.Printf("[DPI] Failed to clean OAF rules: %v", err)
 	}
 
-	// 如果没有要封禁的应用或受管 MAC，直接返回
+	// If no apps or MACs to block, return early
 	if len(appIDs) == 0 || len(macList) == 0 {
 		log.Println("[DPI] No apps or MACs to block.")
 		return nil
 	}
 
-	// 2. 加载 App ID 规则: op 1
+	// 2. Load App ID rules: op 1
 	if err := m.sendOAFCommand(map[string]interface{}{
 		"op": 1,
 		"data": map[string]interface{}{
@@ -570,7 +573,7 @@ func (m *DPIManager) ApplyRules(appIDs []int, macList []string) error {
 		return fmt.Errorf("failed to load app rules: %w", err)
 	}
 
-	// 3. 加载 MAC 列表: op 4
+	// 3. Load MAC list: op 4
 	if err := m.sendOAFCommand(map[string]interface{}{
 		"op": 4,
 		"data": map[string]interface{}{
@@ -580,14 +583,14 @@ func (m *DPIManager) ApplyRules(appIDs []int, macList []string) error {
 		return fmt.Errorf("failed to load mac list: %w", err)
 	}
 
-	// 设置工作模式为 0 (黑名单模式)
+	// Set operational mode to 0 (blacklist mode)
 	_ = os.WriteFile("/proc/sys/oaf/work_mode", []byte("0\n"), 0644)
 
 	log.Printf("[DPI] Applied %d blocked apps on %d devices via kmod-oaf", len(appIDs), len(macList))
 	return nil
 }
 
-// sendOAFCommand 向 /dev/appfilter 发送 JSON 命令
+// sendOAFCommand sends JSON control command to /dev/appfilter
 func (m *DPIManager) sendOAFCommand(payload map[string]interface{}) error {
 	data, err := json.Marshal(payload)
 	if err != nil {

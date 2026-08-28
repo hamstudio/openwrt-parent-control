@@ -7,7 +7,7 @@ final class ParentControlCoreTests: XCTestCase {
         let jsonStr = """
         {
           "id": "m_test",
-          "name": "小明",
+          "name": "Alice",
           "avatar": "boy",
           "device_macs": ["00:11:22:33:44:55"],
           "enabled": true,
@@ -30,7 +30,7 @@ final class ParentControlCoreTests: XCTestCase {
         let member = try JSONDecoder().decode(Member.self, from: data)
 
         XCTAssertEqual(member.id, "m_test")
-        XCTAssertEqual(member.name, "小明")
+        XCTAssertEqual(member.name, "Alice")
         XCTAssertEqual(member.quotaMinutes, 120)
         XCTAssertEqual(member.usedMinutes, 60)
         XCTAssertEqual(member.quotaProgress, 0.5)
@@ -44,7 +44,7 @@ final class ParentControlCoreTests: XCTestCase {
           "mac": "F0:18:98:AA:BB:CC",
           "ip": "192.168.0.150",
           "hostname": "iPhone-14",
-          "custom_name": "小明的手机",
+          "custom_name": "Alice's iPhone",
           "vendor": "Apple",
           "online": true,
           "member_id": "m_test",
@@ -59,7 +59,7 @@ final class ParentControlCoreTests: XCTestCase {
         let device = try JSONDecoder().decode(Device.self, from: data)
 
         XCTAssertEqual(device.mac, "F0:18:98:AA:BB:CC")
-        XCTAssertEqual(device.displayName, "小明的手机")
+        XCTAssertEqual(device.displayName, "Alice's iPhone")
         XCTAssertTrue(device.online)
         XCTAssertEqual(device.formattedSpeed, "1.0 MB/s")
     }

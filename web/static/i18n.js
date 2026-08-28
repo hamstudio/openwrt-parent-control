@@ -1,4 +1,4 @@
-// 8 国语言国际化字典 (i18n Translations)
+// Multi-language internationalization dictionary (i18n Translations)
 const I18N_LOCALES = {
   "zh-CN": {
     "name": "简体中文",
@@ -181,7 +181,10 @@ const I18N_LOCALES = {
     "presetSchool": "上学日管控",
     "allowSchedulePrefix": "仅允许",
     "scheduleSummaryAllDay": "全天允许上网",
-    "slotNumber": "时段"
+    "slotNumber": "时段",
+    "loadingData": "正在加载数据...",
+    "savingData": "正在保存并应用规则...",
+    "btnSaving": "保存中..."
   },
   "en-US": {
     "name": "English",
@@ -366,7 +369,10 @@ const I18N_LOCALES = {
     "presetSchool": "School Day",
     "allowSchedulePrefix": "Allowed",
     "scheduleSummaryAllDay": "Allowed all day",
-    "slotNumber": "Slot"
+    "slotNumber": "Slot",
+    "loadingData": "Loading data...",
+    "savingData": "Saving and applying rules...",
+    "btnSaving": "Saving..."
   },
   "zh-TW": {
     "name": "繁體中文",
@@ -551,7 +557,10 @@ const I18N_LOCALES = {
     "presetSchool": "上學日管控",
     "allowSchedulePrefix": "僅允許",
     "scheduleSummaryAllDay": "全天允許上網",
-    "slotNumber": "時段"
+    "slotNumber": "時段",
+    "loadingData": "正在載入資料...",
+    "savingData": "正在儲存並套用規則...",
+    "btnSaving": "儲存中..."
   },
   "ja-JP": {
     "name": "日本語",
@@ -736,7 +745,10 @@ const I18N_LOCALES = {
     "presetSchool": "学校日制限",
     "allowSchedulePrefix": "許可",
     "scheduleSummaryAllDay": "終日インターネット許可",
-    "slotNumber": "枠"
+    "slotNumber": "枠",
+    "loadingData": "データを読み込み中...",
+    "savingData": "ルールを保存・適用中...",
+    "btnSaving": "保存中..."
   },
   "ko-KR": {
     "name": "한국어",
@@ -921,7 +933,10 @@ const I18N_LOCALES = {
     "presetSchool": "등교일 관리",
     "allowSchedulePrefix": "허용",
     "scheduleSummaryAllDay": "종일 인터넷 허용",
-    "slotNumber": "구간"
+    "slotNumber": "구간",
+    "loadingData": "데이터를 불러오는 중...",
+    "savingData": "규칙 저장 및 적용 중...",
+    "btnSaving": "저장 중..."
   },
   "de-DE": {
     "name": "Deutsch",
@@ -1106,7 +1121,10 @@ const I18N_LOCALES = {
     "presetSchool": "Schultag",
     "allowSchedulePrefix": "Erlaubt",
     "scheduleSummaryAllDay": "Ganztägig erlaubt",
-    "slotNumber": "Slot"
+    "slotNumber": "Slot",
+    "loadingData": "Daten werden geladen...",
+    "savingData": "Regeln werden gespeichert und angewendet...",
+    "btnSaving": "Speichern..."
   },
   "fr-FR": {
     "name": "Français",
@@ -1291,7 +1309,10 @@ const I18N_LOCALES = {
     "presetSchool": "Jour d'école",
     "allowSchedulePrefix": "Autorisé",
     "scheduleSummaryAllDay": "Autorisé toute la journée",
-    "slotNumber": "Plage"
+    "slotNumber": "Plage",
+    "loadingData": "Chargement des données...",
+    "savingData": "Enregistrement et application des règles...",
+    "btnSaving": "Enregistrement..."
   },
   "es-ES": {
     "name": "Español",
@@ -1474,7 +1495,10 @@ const I18N_LOCALES = {
     "presetSchool": "Día escolar",
     "allowSchedulePrefix": "Permitido",
     "scheduleSummaryAllDay": "Permitido todo el día",
-    "slotNumber": "Tramo"
+    "slotNumber": "Tramo",
+    "loadingData": "Cargando datos...",
+    "savingData": "Guardando y aplicando reglas...",
+    "btnSaving": "Guardando..."
   }
 };
 

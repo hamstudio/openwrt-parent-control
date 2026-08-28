@@ -16,9 +16,9 @@ import (
 	"time"
 )
 
-// LoadOrCreateTLSConfig 智能加载系统证书（兼容 PEM 与 DER 格式），或自动即时生成自签名证书
+// LoadOrCreateTLSConfig intelligently loads system certificates (supporting PEM and DER formats), or automatically generates a self-signed certificate on the fly
 func LoadOrCreateTLSConfig() (*tls.Config, error) {
-	// 1. 尝试从系统路径加载并解析
+	// 1. Attempt to load and parse from common system paths
 	certFiles := []string{"/etc/uhttpd.crt", "/etc/ssl/certs/uhttpd.crt", "/etc/nginx/uhttpd.crt"}
 	keyFiles := []string{"/etc/uhttpd.key", "/etc/ssl/certs/uhttpd.key", "/etc/nginx/uhttpd.key"}
 
@@ -36,7 +36,7 @@ func LoadOrCreateTLSConfig() (*tls.Config, error) {
 		}
 	}
 
-	// 2. 系统证书不存在或格式特殊时，自动生成标准的自签名 ECDSA 证书
+	// 2. If system certs do not exist or have proprietary formats, generate standard self-signed ECDSA certificate
 	log.Println("[API] Generating self-signed TLS certificate for HTTPS...")
 	cert, err := generateSelfSignedCert()
 	if err != nil {
@@ -48,27 +48,27 @@ func LoadOrCreateTLSConfig() (*tls.Config, error) {
 	}, nil
 }
 
-// parseCertAndKey 兼容解析 PEM 和 DER 格式的证书与私钥
+// parseCertAndKey parses PEM and DER format certificates and private keys
 func parseCertAndKey(certBytes, keyBytes []byte) (*tls.Certificate, error) {
-	// 1. 尝试直接作为 PEM 解析
+	// 1. Attempt parsing directly as PEM
 	cert, err := tls.X509KeyPair(certBytes, keyBytes)
 	if err == nil {
 		return &cert, nil
 	}
 
-	// 2. 尝试作为 DER 格式转换为 PEM
+	// 2. Attempt converting DER format to PEM
 	var pemCert, pemKey []byte
 
-	// 检查 cert 是否已经是 PEM
+	// Check if cert is already PEM
 	if block, _ := pem.Decode(certBytes); block == nil {
 		pemCert = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certBytes})
 	} else {
 		pemCert = certBytes
 	}
 
-	// 检查 key 是否已经是 PEM
+	// Check if key is already PEM
 	if block, _ := pem.Decode(keyBytes); block == nil {
-		// 尝试解析各种 DER 私钥格式
+		// Attempt parsing various DER private key formats
 		if _, err := x509.ParsePKCS8PrivateKey(keyBytes); err == nil {
 			pemKey = pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyBytes})
 		} else if _, err := x509.ParseECPrivateKey(keyBytes); err == nil {
@@ -76,7 +76,7 @@ func parseCertAndKey(certBytes, keyBytes []byte) (*tls.Certificate, error) {
 		} else if _, err := x509.ParsePKCS1PrivateKey(keyBytes); err == nil {
 			pemKey = pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: keyBytes})
 		} else {
-			// 通用 PRIVATE KEY 包装
+			// Generic PRIVATE KEY wrapper
 			pemKey = pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyBytes})
 		}
 	} else {
@@ -91,7 +91,7 @@ func parseCertAndKey(certBytes, keyBytes []byte) (*tls.Certificate, error) {
 	return nil, err
 }
 
-// generateSelfSignedCert 即时生成高强度 ECDSA P-256 自签名证书
+// generateSelfSignedCert generates a self-signed ECDSA P-256 certificate on the fly
 func generateSelfSignedCert() (*tls.Certificate, error) {
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -99,7 +99,7 @@ func generateSelfSignedCert() (*tls.Certificate, error) {
 	}
 
 	notBefore := time.Now().Add(-10 * time.Minute)
-	notAfter := notBefore.Add(3650 * 24 * time.Hour) // 10 年有效期
+	notAfter := notBefore.Add(3650 * 24 * time.Hour) // 10-year validity
 
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)

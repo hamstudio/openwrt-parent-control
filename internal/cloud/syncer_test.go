@@ -54,11 +54,11 @@ func TestCloudSyncerExecution(t *testing.T) {
 		}, nil
 	})
 
-	// 2. 初始化核心组件
+	// 2. Initialize core components
 	tmpDir := t.TempDir()
 	cfgFile := filepath.Join(tmpDir, "config.json")
 	featFile := filepath.Join(tmpDir, "feature.cfg")
-	_ = os.WriteFile(featFile, []byte("#version 1.0\n#class game 1 游戏\n101 王者荣耀: [tcp]\n"), 0644)
+	_ = os.WriteFile(featFile, []byte("#version 1.0\n#class game 1 Games\n101 GameApp: [tcp]\n"), 0644)
 
 	cfgStore := config.NewConfigStore(cfgFile)
 	cfgStore.Data.Settings.CloudSyncEnabled = true
@@ -66,7 +66,7 @@ func TestCloudSyncerExecution(t *testing.T) {
 	cfgStore.Data.Members = []models.Member{
 		{
 			ID:       "m_test",
-			Name:     "测试成员",
+			Name:     "Test Member",
 			Enabled:  true,
 			IsLocked: false,
 		},
@@ -82,7 +82,7 @@ func TestCloudSyncerExecution(t *testing.T) {
 		engine.SetMember(m)
 	}
 
-	// 3. 执行单次同步
+	// 3. Execute single sync
 	syncer := NewSyncer(engine, devTracker, dpiMgr, cfgStore)
 	syncer.SetHTTPTransport(mockTransport)
 	syncer.syncState()
@@ -91,7 +91,7 @@ func TestCloudSyncerExecution(t *testing.T) {
 		t.Fatalf("expected state to be synced to mock transport")
 	}
 
-	// 4. 验证成员是否已经被指令 LOCK 成功
+	// 4. Verify member was successfully locked by LOCK command
 	members := engine.GetMembers()
 	var targetMember *models.Member
 	for _, m := range members {

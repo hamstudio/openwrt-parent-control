@@ -12,7 +12,7 @@ import (
 	"parentcontrol/internal/models"
 )
 
-// DeviceTracker 管理局域网设备发现与流量追踪
+// DeviceTracker manages local network device discovery and traffic monitoring
 type DeviceTracker struct {
 	mu         sync.RWMutex
 	devices    map[string]*models.Device // key: MAC
@@ -20,7 +20,7 @@ type DeviceTracker struct {
 	lastSample time.Time
 }
 
-// NewDeviceTracker 创建设备追踪器
+// NewDeviceTracker creates a new DeviceTracker instance
 func NewDeviceTracker() *DeviceTracker {
 	dt := &DeviceTracker{
 		devices:    make(map[string]*models.Device),
@@ -30,15 +30,15 @@ func NewDeviceTracker() *DeviceTracker {
 	return dt
 }
 
-// ScanDevices 扫描局域网内的所有设备
+// ScanDevices scans all devices connected to the local network
 func (dt *DeviceTracker) ScanDevices() []*models.Device {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 
 	now := time.Now()
 
-	// 1. 读取 /tmp/dhcp.leases
-	// 格式: 1724734800 00:11:22:33:44:55 192.168.0.150 iPhone-14 01:00:11:22:33:44:55
+	// 1. Read /tmp/dhcp.leases
+	// Format: 1724734800 00:11:22:33:44:55 192.168.0.150 iPhone-14 01:00:11:22:33:44:55
 	if file, err := os.Open("/tmp/dhcp.leases"); err == nil {
 		scanner := bufio.NewScanner(file)
 		for scanner.Scan() {
@@ -69,8 +69,8 @@ func (dt *DeviceTracker) ScanDevices() []*models.Device {
 		file.Close()
 	}
 
-	// 2. 读取 /proc/net/arp 补充 ARP 表设备
-	// 格式: IP address HW type Flags HW address Mask Device
+	// 2. Read /proc/net/arp to supplement ARP table devices
+	// Format: IP address HW type Flags HW address Mask Device
 	if file, err := os.Open("/proc/net/arp"); err == nil {
 		scanner := bufio.NewScanner(file)
 		for scanner.Scan() {
@@ -102,13 +102,13 @@ func (dt *DeviceTracker) ScanDevices() []*models.Device {
 		file.Close()
 	}
 
-	// 3. 计算活跃流量 (从 conntrack 统计字节)
+	// 3. Calculate active traffic (count bytes from conntrack)
 	dt.updateTrafficRates(now)
 
-	// 转换为列表返回
+	// Return as slice
 	list := make([]*models.Device, 0, len(dt.devices))
 	for _, dev := range dt.devices {
-		// 如果超过 10 分钟未更新且没有流量，标记为离线
+		// If inactive for more than 10 minutes with no traffic, mark offline
 		if now.Sub(dev.LastSeen) > 10*time.Minute {
 			dev.Online = false
 		}
@@ -118,7 +118,7 @@ func (dt *DeviceTracker) ScanDevices() []*models.Device {
 	return list
 }
 
-// updateTrafficRates 计算各设备的速率
+// updateTrafficRates calculates current transfer rates for each device
 func (dt *DeviceTracker) updateTrafficRates(now time.Time) {
 	elapsed := now.Sub(dt.lastSample).Seconds()
 	if elapsed <= 0 {
@@ -127,7 +127,7 @@ func (dt *DeviceTracker) updateTrafficRates(now time.Time) {
 
 	currentBytes := make(map[string]uint64)
 
-	// 尝试读取 /proc/net/nf_conntrack 或 /proc/net/ip_conntrack
+	// Try reading /proc/net/nf_conntrack or /proc/net/ip_conntrack
 	conntrackPath := "/proc/net/nf_conntrack"
 	if _, err := os.Stat(conntrackPath); os.IsNotExist(err) {
 		conntrackPath = "/proc/net/ip_conntrack"
@@ -137,8 +137,7 @@ func (dt *DeviceTracker) updateTrafficRates(now time.Time) {
 		scanner := bufio.NewScanner(file)
 		for scanner.Scan() {
 			line := scanner.Text()
-			// 查找 bytes= 统计
-			// src=192.168.0.150 dst=... bytes=12345
+			// Look for bytes= statistic: src=192.168.0.150 dst=... bytes=12345
 			if strings.Contains(line, "bytes=") {
 				fields := strings.Fields(line)
 				var srcIP string
@@ -152,7 +151,7 @@ func (dt *DeviceTracker) updateTrafficRates(now time.Time) {
 					}
 				}
 				if srcIP != "" {
-					// 映射 IP 到 MAC
+					// Map IP to MAC
 					for _, d := range dt.devices {
 						if d.IP == srcIP {
 							currentBytes[d.MAC] += bytesVal
@@ -179,14 +178,14 @@ func (dt *DeviceTracker) updateTrafficRates(now time.Time) {
 	dt.lastSample = now
 }
 
-// GetDevice 获取单个设备
+// GetDevice returns a single device by MAC address
 func (dt *DeviceTracker) GetDevice(mac string) *models.Device {
 	dt.mu.RLock()
 	defer dt.mu.RUnlock()
 	return dt.devices[strings.ToUpper(mac)]
 }
 
-// getVendorByMAC 常见 MAC OUI 厂商匹配
+// getVendorByMAC matches common MAC OUI vendor prefixes
 func getVendorByMAC(mac string) string {
 	clean := strings.ToUpper(strings.ReplaceAll(strings.ReplaceAll(mac, ":", ""), "-", ""))
 	if len(clean) < 6 {

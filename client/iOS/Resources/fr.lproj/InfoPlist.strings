@@ -1,0 +1,4 @@
+/* Français InfoPlist.strings */
+"CFBundleDisplayName" = "Contrôle Parental";
+"CFBundleName" = "ParentControl";
+"NSLocalNetworkUsageDescription" = "ParentControl a besoin d'accéder au réseau local pour détecter et se connecter à votre routeur.";

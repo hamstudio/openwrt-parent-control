@@ -106,11 +106,20 @@ ParentControl Guard 的深度应用封禁依赖 OpenWrt 内核级 `kmod-oaf` 模
 
 ### Q4.1: 手机在 4G/5G 外网环境下如何远程管控家里的路由器？
 系统支持通过 **Cloudflare Worker** 作为安全的无服务器中继：
-1. 按照 `cloud/cloudflare-worker/README.md` 在 Cloudflare 免费部署专属 Worker；
+1. 按照 [Cloudflare Worker 部署指南](../cloud/worker/README_zh.md) 在 Cloudflare 免费部署专属 Worker；
 2. 在路由器的 **【全局安全配置】** 中填入 Worker URL 与通信 Secret 并开启同步；
 3. 手机 App 填入相同 Worker 地址即可随时随地跨公网查看状态、一键断网或奖励加时。
 
 ---
 
 ### Q4.2: 路由器主动出站同步安全吗？会暴露内网端口吗？
-**绝对安全**。路由器内部的 `CloudSyncer` 守护进程仅发起**主动出站（Outbound）** HTTPS 请求轮询 Cloudflare 中继队列，**无需路由器具备公网 IP，也无需在光猫/路由器上做任何危险的端口映射（Port Forwarding）**，杜绝公网黑客扫描内网的风险。
+**绝对安全**。路由器内部的 `CloudSyncer` 守护进程仅发起**主动出站（Outbound）** HTTPS / WSS 请求连接中继服务器，**无需路由器具备公网 IP，也无需在光猫/路由器上做任何危险的端口映射（Port Forwarding）**，杜绝公网黑客扫描内网的风险。
+
+---
+
+### Q4.3: 为什么推荐在国内 VPS 上部署 Go Relay Server？
+对于中国大陆地区的网络环境，Cloudflare 可能会面临丢包或高延迟。
+部署独立的 **Go Relay Server (`cmd/relay-server`)** 具备以下优势：
+1. **毫秒级极速响应**：基于 WebSocket + 内存 MQ 双向长连接，一键断网/加时指令瞬间下发；
+2. **零依赖极轻量**：单二进制文件，常驻内存仅约 10MB，支持 10 秒 Docker Compose 启动；
+3. **断线离线缓冲**：即使路由器短暂断网，手机端下发的配置修改也不会丢失，重连后秒级自动同步。

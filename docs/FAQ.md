@@ -106,11 +106,19 @@ Navigate to the **Global Security** tab and enable **Randomized MAC Quarantine**
 
 ### Q4.1: How can parents manage the router over 4G/5G mobile networks when away from home?
 Deploy the included serverless relay on Cloudflare Workers:
-1. Follow `cloud/cloudflare-worker/README.md` to deploy your free worker;
+1. Follow [Cloudflare Worker Deployment Guide](../cloud/worker/README.md) to deploy your free worker;
 2. Enter the Worker URL and Secret in the router's **Global Security** settings;
 3. Enter the same URL in the mobile app to manage parental rules from anywhere.
 
 ---
 
 ### Q4.2: Is outbound cloud synchronization secure? Does it expose internal router ports?
-**Yes, 100% secure**. The `CloudSyncer` daemon initiates **outbound-only** HTTPS long-poll requests to Cloudflare. **No public IP, DDNS, or port forwarding is required**, leaving your router completely invisible to external port scanners.
+**Yes, 100% secure**. The `CloudSyncer` daemon initiates **outbound-only** HTTPS / WSS requests to the relay server. **No public IP, DDNS, or port forwarding is required**, leaving your router completely invisible to external port scanners.
+
+---
+
+### Q4.3: Why deploy a standalone Go Relay Server on a VPS?
+For domestic networks where Cloudflare Workers experience connection latency or throttling:
+1. **Millisecond Response**: Built-in in-memory PubSub MQ and bidirectional WebSocket push;
+2. **Zero Dependencies**: Single binary with ~10MB memory usage, 10-second Docker Compose startup;
+3. **Offline Buffering**: Rules and commands are safely queued if the router temporarily disconnects.

@@ -7,14 +7,16 @@ import (
 	"strings"
 	"sync"
 	"time"
+	_ "time/tzdata"
 
 	"parentcontrol/internal/device"
 	"parentcontrol/internal/dpi"
 	"parentcontrol/internal/firewall"
 	"parentcontrol/internal/models"
+	"parentcontrol/internal/tz"
 )
 
-// PolicyEngine 调度引擎：协调配额、时间表与防火墙执行
+// PolicyEngine coordinates quotas, schedule rules, and firewall enforcement
 type PolicyEngine struct {
 	mu           sync.RWMutex
 	members      map[string]*models.Member
@@ -26,7 +28,7 @@ type PolicyEngine struct {
 	lastResetDay int
 }
 
-// NewPolicyEngine 创建调度引擎
+// NewPolicyEngine creates a new PolicyEngine instance
 func NewPolicyEngine(fw *firewall.FirewallManager, dpiMgr *dpi.DPIManager, dt *device.DeviceTracker) *PolicyEngine {
 	engine := &PolicyEngine{
 		members:      make(map[string]*models.Member),
@@ -34,7 +36,7 @@ func NewPolicyEngine(fw *firewall.FirewallManager, dpiMgr *dpi.DPIManager, dt *d
 		dpi:          dpiMgr,
 		tracker:      dt,
 		stopChan:     make(chan struct{}),
-		lastResetDay: time.Now().Day(),
+		lastResetDay: -1,
 		settings: models.GlobalSettings{
 			Enabled:           true,
 			WebPort:           8088,
@@ -47,13 +49,13 @@ func NewPolicyEngine(fw *firewall.FirewallManager, dpiMgr *dpi.DPIManager, dt *d
 	return engine
 }
 
-// Start 启动后台周期性评估与配额计数循环
+// Start launches the background periodic policy evaluation and quota counting loop
 func (pe *PolicyEngine) Start() {
 	go pe.runLoop()
 	log.Println("[Engine] Policy and quota engine started.")
 }
 
-// Stop 停止调度引擎
+// Stop terminates the policy engine
 func (pe *PolicyEngine) Stop() {
 	close(pe.stopChan)
 	pe.fw.Cleanup()
@@ -70,26 +72,27 @@ func (pe *PolicyEngine) runLoop() {
 		select {
 		case <-pe.stopChan:
 			return
-		case now := <-ticker.C:
+		case <-ticker.C:
+			now := tz.Now()
 			pe.tracker.ScanDevices()
 
-			// 检查是否跨天重置配额
+			// Check if daily quota reset is due
 			pe.checkDailyReset(now)
 
 			minuteCounter++
-			// 每 60 秒 (6 次 10s tick) 评估一次时长累加
+			// Evaluate active usage duration accumulation every 60s (6 x 10s ticks)
 			if minuteCounter >= 6 {
 				minuteCounter = 0
 				pe.evaluateActiveUsage(now)
 			}
 
-			// 每次 tick 评估并同步防火墙与 DPI 规则
+			// Evaluate and sync firewall & DPI rules on each tick
 			pe.EvaluateAndApply(now)
 		}
 	}
 }
 
-// checkDailyReset 每天在指定小时重置今日已用时长
+// checkDailyReset resets daily active duration at the specified hour
 func (pe *PolicyEngine) checkDailyReset(now time.Time) {
 	pe.mu.Lock()
 	defer pe.mu.Unlock()
@@ -104,7 +107,7 @@ func (pe *PolicyEngine) checkDailyReset(now time.Time) {
 	}
 }
 
-// evaluateActiveUsage 检测受管成员的设备是否有网络活动并累加时长
+// evaluateActiveUsage checks if managed devices have network traffic and increments active minutes
 func (pe *PolicyEngine) evaluateActiveUsage(now time.Time) {
 	pe.mu.Lock()
 	defer pe.mu.Unlock()
@@ -114,7 +117,7 @@ func (pe *PolicyEngine) evaluateActiveUsage(now time.Time) {
 			continue
 		}
 
-		// 检查名下设备是否有流量 (上行+下行速率 > 2KB/s)
+		// Check if any bound device has active traffic (downstream + upstream rate > 2KB/s)
 		isActive := false
 		for _, mac := range member.DeviceMACs {
 			dev := pe.tracker.GetDevice(mac)
@@ -131,7 +134,7 @@ func (pe *PolicyEngine) evaluateActiveUsage(now time.Time) {
 	}
 }
 
-// EvaluateAndApply 核心策略决策：判定所有设备的放行/阻断状态并下发底层
+// EvaluateAndApply makes policy decisions: determines allow/block state for all devices and applies to kernel
 func (pe *PolicyEngine) EvaluateAndApply(now time.Time) {
 	pe.mu.Lock()
 	defer pe.mu.Unlock()
@@ -153,12 +156,12 @@ func (pe *PolicyEngine) EvaluateAndApply(now time.Time) {
 
 		allManagedMACs = append(allManagedMACs, member.DeviceMACs...)
 
-		// 汇总需要封禁的 DPI App ID
+		// Collect blocked DPI App IDs
 		for _, appID := range member.BlockedAppIDs {
 			allBlockedAppIDs[appID] = true
 		}
 
-		// 判定该成员是否应当完全切断外网
+		// Determine if member should be completely disconnected
 		shouldBlock := pe.shouldBlockMember(member, now)
 
 		if shouldBlock {
@@ -166,17 +169,17 @@ func (pe *PolicyEngine) EvaluateAndApply(now time.Time) {
 		}
 	}
 
-	// 汇总黑名单中的 MAC 地址 (单设备一键断网)
+	// Add blacklisted MAC addresses (single device one-click block)
 	for _, mac := range pe.settings.CustomBlacklist {
 		if mac != "" {
 			blockedMACs = append(blockedMACs, mac)
 		}
 	}
 
-	// 下发 iptables 阻断规则
+	// Apply iptables block rules
 	_ = pe.fw.SyncBlockedMACs(blockedMACs)
 
-	// 下发 kmod-oaf DPI 规则
+	// Apply kmod-oaf DPI rules
 	appIDsSlice := make([]int, 0, len(allBlockedAppIDs))
 	for id := range allBlockedAppIDs {
 		appIDsSlice = append(appIDsSlice, id)
@@ -184,24 +187,24 @@ func (pe *PolicyEngine) EvaluateAndApply(now time.Time) {
 	_ = pe.dpi.ApplyRules(appIDsSlice, allManagedMACs)
 }
 
-// shouldBlockMember 判定单个成员是否需要被完全切断外网
+// shouldBlockMember determines whether an individual member should have internet access cut off
 func (pe *PolicyEngine) shouldBlockMember(m *models.Member, now time.Time) bool {
-	// 1. 检查一键断网
+	// 1. Check one-click lock
 	if m.IsLocked {
 		return true
 	}
 
-	// 2. 检查临时加时 (Bonus Time) 豁免
+	// 2. Check temporary bonus time exemption
 	if m.BonusUntil != nil && m.BonusUntil.After(now) {
-		return false // 加时中，放行
+		return false // Under bonus time, allow access
 	}
 
-	// 3. 检查每日配额超额
+	// 3. Check daily quota limit
 	if m.QuotaMinutes > 0 && m.UsedMinutes >= m.QuotaMinutes {
 		return true
 	}
 
-	// 4. 检查时间计划表
+	// 4. Check schedule rules
 	if m.Schedule.Enabled {
 		currentWeekday := int(now.Weekday())
 		isMatchedDay := false
@@ -224,10 +227,10 @@ func (pe *PolicyEngine) shouldBlockMember(m *models.Member, now time.Time) bool 
 			}
 
 			if m.Schedule.Action == "block" && inRange {
-				return true // 命中禁网时间段
+				return true // Matched block interval
 			}
 			if m.Schedule.Action == "allow" && !inRange {
-				return true // 不在允许上网时间段内
+				return true // Outside allowed interval
 			}
 		}
 	}
@@ -235,7 +238,7 @@ func (pe *PolicyEngine) shouldBlockMember(m *models.Member, now time.Time) bool 
 	return false
 }
 
-// isTimeInRange 判定 current 是否在 start 和 end 之间 (支持跨夜如 21:00 到 07:00)
+// isTimeInRange determines whether current time is between start and end (supports overnight spans like "21:00" to "07:00")
 func isTimeInRange(curr, start, end string) bool {
 	if start == "" || end == "" {
 		return false
@@ -243,25 +246,25 @@ func isTimeInRange(curr, start, end string) bool {
 	if start <= end {
 		return curr >= start && curr <= end
 	}
-	// 跨午夜
+	// Spans midnight
 	return curr >= start || curr <= end
 }
 
-// SetMember 添加或更新成员
+// SetMember adds or updates a managed member
 func (pe *PolicyEngine) SetMember(m models.Member) {
 	pe.mu.Lock()
 	defer pe.mu.Unlock()
 	pe.members[m.ID] = &m
 }
 
-// DeleteMember 删除成员
+// DeleteMember removes a managed member
 func (pe *PolicyEngine) DeleteMember(id string) {
 	pe.mu.Lock()
 	defer pe.mu.Unlock()
 	delete(pe.members, id)
 }
 
-// GetMembers 获取所有成员
+// GetMembers returns all managed members
 func (pe *PolicyEngine) GetMembers() []models.Member {
 	pe.mu.RLock()
 	defer pe.mu.RUnlock()
@@ -272,7 +275,7 @@ func (pe *PolicyEngine) GetMembers() []models.Member {
 	return list
 }
 
-// GetMember 获取单个成员
+// GetMember retrieves an individual member by ID
 func (pe *PolicyEngine) GetMember(id string) (*models.Member, bool) {
 	pe.mu.RLock()
 	defer pe.mu.RUnlock()
@@ -284,7 +287,7 @@ func (pe *PolicyEngine) GetMember(id string) (*models.Member, bool) {
 	return &cp, true
 }
 
-// LockMember 一键断网
+// LockMember locks/blocks a member via one-click lock
 func (pe *PolicyEngine) LockMember(id string) error {
 	pe.mu.Lock()
 	defer pe.mu.Unlock()
@@ -296,7 +299,7 @@ func (pe *PolicyEngine) LockMember(id string) error {
 	return nil
 }
 
-// UnlockMember 解除断网
+// UnlockMember restores internet access for a locked member
 func (pe *PolicyEngine) UnlockMember(id string) error {
 	pe.mu.Lock()
 	defer pe.mu.Unlock()
@@ -305,10 +308,23 @@ func (pe *PolicyEngine) UnlockMember(id string) error {
 		return fmt.Errorf("member not found")
 	}
 	m.IsLocked = false
+
+	// Clean up any member devices from CustomBlacklist if present
+	macMap := make(map[string]bool)
+	for _, dmac := range m.DeviceMACs {
+		macMap[strings.ToLower(strings.TrimSpace(dmac))] = true
+	}
+	newList := make([]string, 0, len(pe.settings.CustomBlacklist))
+	for _, bmac := range pe.settings.CustomBlacklist {
+		if !macMap[strings.ToLower(strings.TrimSpace(bmac))] {
+			newList = append(newList, bmac)
+		}
+	}
+	pe.settings.CustomBlacklist = newList
 	return nil
 }
 
-// BonusMember 奖励加时
+// BonusMember grants temporary bonus internet time in minutes
 func (pe *PolicyEngine) BonusMember(id string, minutes int) error {
 	pe.mu.Lock()
 	defer pe.mu.Unlock()
@@ -316,26 +332,26 @@ func (pe *PolicyEngine) BonusMember(id string, minutes int) error {
 	if !ok {
 		return fmt.Errorf("member not found")
 	}
-	bonusUntil := time.Now().Add(time.Duration(minutes) * time.Minute)
+	bonusUntil := tz.Now().Add(time.Duration(minutes) * time.Minute)
 	m.BonusUntil = &bonusUntil
 	return nil
 }
 
-// UpdateSettings 更新全局设置
+// UpdateSettings updates system-wide settings
 func (pe *PolicyEngine) UpdateSettings(s models.GlobalSettings) {
 	pe.mu.Lock()
 	defer pe.mu.Unlock()
 	pe.settings = s
 }
 
-// GetSettings 获取全局设置
+// GetSettings retrieves current system-wide settings
 func (pe *PolicyEngine) GetSettings() models.GlobalSettings {
 	pe.mu.RLock()
 	defer pe.mu.RUnlock()
 	return pe.settings
 }
 
-// LockDevice 对单个设备执行一键断网
+// LockDevice locks/blocks an individual device by MAC
 func (pe *PolicyEngine) LockDevice(mac string) {
 	pe.mu.Lock()
 	defer pe.mu.Unlock()
@@ -345,7 +361,7 @@ func (pe *PolicyEngine) LockDevice(mac string) {
 		return
 	}
 
-	// 检查是否已经在黑名单中
+	// Check if already present in blacklist
 	exists := false
 	for _, m := range pe.settings.CustomBlacklist {
 		if strings.ToLower(m) == mac {
@@ -357,7 +373,7 @@ func (pe *PolicyEngine) LockDevice(mac string) {
 		pe.settings.CustomBlacklist = append(pe.settings.CustomBlacklist, mac)
 	}
 
-	// 如果该设备属于某个成员，同时检查成员状态
+	// If device belongs to a member, check and update member lock state
 	for _, m := range pe.members {
 		for _, dmac := range m.DeviceMACs {
 			if strings.ToLower(dmac) == mac {
@@ -368,7 +384,7 @@ func (pe *PolicyEngine) LockDevice(mac string) {
 	}
 }
 
-// UnlockDevice 解除单个设备的一键断网
+// UnlockDevice removes single-device one-click block by MAC
 func (pe *PolicyEngine) UnlockDevice(mac string) {
 	pe.mu.Lock()
 	defer pe.mu.Unlock()
@@ -382,7 +398,7 @@ func (pe *PolicyEngine) UnlockDevice(mac string) {
 	}
 	pe.settings.CustomBlacklist = newList
 
-	// 如果属于某个成员，解除该成员的锁定
+	// If device belongs to a member, unlock that member as well
 	for _, m := range pe.members {
 		for _, dmac := range m.DeviceMACs {
 			if strings.ToLower(dmac) == mac {
@@ -393,7 +409,7 @@ func (pe *PolicyEngine) UnlockDevice(mac string) {
 	}
 }
 
-// AssignDeviceToMember 快速将设备分配给指定成员（若 memberID 为空则解绑）
+// AssignDeviceToMember assigns a device to a specified member (unbinds if memberID is empty)
 func (pe *PolicyEngine) AssignDeviceToMember(mac string, memberID string) {
 	pe.mu.Lock()
 	defer pe.mu.Unlock()
@@ -403,7 +419,7 @@ func (pe *PolicyEngine) AssignDeviceToMember(mac string, memberID string) {
 		return
 	}
 
-	// 1. 先从所有现有成员中移除该 MAC，避免重复绑定
+	// 1. Remove MAC from all existing members to prevent duplicate bindings
 	for _, m := range pe.members {
 		newMACs := make([]string, 0, len(m.DeviceMACs))
 		for _, dmac := range m.DeviceMACs {
@@ -414,7 +430,7 @@ func (pe *PolicyEngine) AssignDeviceToMember(mac string, memberID string) {
 		m.DeviceMACs = newMACs
 	}
 
-	// 2. 如果指定了目标 memberID，则加入目标成员
+	// 2. If target memberID is specified, bind to target member
 	if memberID != "" {
 		if target, ok := pe.members[memberID]; ok {
 			target.DeviceMACs = append(target.DeviceMACs, mac)
@@ -422,7 +438,7 @@ func (pe *PolicyEngine) AssignDeviceToMember(mac string, memberID string) {
 	}
 }
 
-// ParseTimeString 格式化辅助
+// ParseTimeString helper to parse "HH:MM" into total minutes from midnight
 func ParseTimeString(s string) int {
 	parts := strings.Split(s, ":")
 	if len(parts) != 2 {

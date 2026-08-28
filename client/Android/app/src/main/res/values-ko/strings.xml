@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">자녀 보호</string>
+    <string name="dashboard_title">대시보드</string>
+    <string name="devices_title">기기 목록</string>
+    <string name="settings_title">설정</string>
+</resources>

@@ -2,7 +2,7 @@ name = "parent-control-cloud-worker"
 main = "src/index.ts"
 compatibility_date = "2024-01-01"
 
-# KV 命名空间绑定，用于存放路由器状态与指令队列
+# KV namespace binding for storing router state and command queues
 [[kv_namespaces]]
 binding = "PARENT_CONTROL_KV"
 id = "parent_control_kv_prod"

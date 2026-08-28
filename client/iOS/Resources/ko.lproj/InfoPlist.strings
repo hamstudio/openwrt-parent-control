@@ -1,0 +1,4 @@
+/* 한국어 InfoPlist.strings */
+"CFBundleDisplayName" = "자녀 보호";
+"CFBundleName" = "ParentControl";
+"NSLocalNetworkUsageDescription" = "공유기 기기를 검색하고 연결하려면 로컬 네트워크 접근 권한이 필요합니다.";

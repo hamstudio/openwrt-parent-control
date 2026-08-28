@@ -1,31 +1,31 @@
-# Android 端复用 Swift 核心逻辑架构指南 (Android Swift Interop)
+# Android Swift Interoperability Architecture Guide (Shared Swift Core)
 
 [English](ANDROID_SWIFT_INTEROP.md) | [简体中文](ANDROID_SWIFT_INTEROP_zh.md)
 
-本项目采用 **Shared Swift Core (通用 Swift 业务层)** 架构：核心数据模型、网络请求、路由器自动探测、配额倒计时与加时算法全部由 `ParentControlCore` 统一实现，iOS 直接使用，Android 通过 **C-FFI / JNI** 无缝复用。
+This project adopts a **Shared Swift Core** architecture: core data models, network client, router auto-discovery, quota countdowns, and bonus algorithms are all unified in `ParentControlCore`. The iOS client uses it directly, while Android reuses it seamlessly via **C-FFI / JNI**.
 
 ---
 
-## 1. 架构示意图
+## 1. Architecture Diagram
 
 ```mermaid
 flowchart TD
-    subgraph Shared_Core [通用 Swift 核心层 (ParentControlCore)]
-        Models[Models.swift 强类型数据模型]
-        Network[ParentControlClient.swift 异步网络引擎]
-        Discovery[RouterDiscovery.swift 路由器自动探测]
-        Bridge[ParentControlBridge.swift C-FFI / JNI 导出接口]
+    subgraph Shared_Core [Shared Swift Core (ParentControlCore)]
+        Models[Models.swift Strongly-typed Models]
+        Network[ParentControlClient.swift Async Networking]
+        Discovery[RouterDiscovery.swift Router Auto-Discovery]
+        Bridge[ParentControlBridge.swift C-FFI / JNI Export]
     end
 
-    subgraph iOS_App [iOS 原生客户端]
-        SwiftUI[SwiftUI 界面 (Dashboard / Devices / Editor)]
-        AppState[AppState.swift 响应式状态流]
+    subgraph iOS_App [iOS Native App]
+        SwiftUI[SwiftUI Views (Dashboard / Devices / Editor)]
+        AppState[AppState.swift Reactive State Stream]
     end
 
-    subgraph Android_App [Android 原生客户端]
-        JNI[NativeBridge.kt JNI 动态链接库 libParentControlBridge.so]
-        KotlinRepo[ParentControlRepository.kt Kotlin 协程 / Flow 封装]
-        Compose[Jetpack Compose 响应式界面]
+    subgraph Android_App [Android Native App]
+        JNI[NativeBridge.kt JNI Shared Lib libParentControlBridge.so]
+        KotlinRepo[ParentControlRepository.kt Kotlin Coroutines / Flow]
+        Compose[Jetpack Compose UI]
     end
 
     Models --> AppState
@@ -41,25 +41,25 @@ flowchart TD
 
 ---
 
-## 2. 编译 Swift 为 Android .so 动态链接库
+## 2. Compiling Swift to Android .so Dynamic Shared Libraries
 
-通过 Swift Android Toolchain（或 Docker Android NDK Swift 构建镜像），可以轻松将 `ParentControlCore` 编译为 `arm64-v8a` 和 `x86_64` 的 Linux 动态链接库：
+Using the Swift Android Toolchain (or Docker Android NDK Swift builder image), `ParentControlCore` can be compiled into Linux dynamic shared libraries for `arm64-v8a` and `x86_64`:
 
 ```bash
-# 交叉编译到 Android ARM64
+# Cross-compile to Android ARM64
 swift build \
   --destination destination-aarch64-linux-android.json \
   -c release \
   --product ParentControlBridge
 ```
 
-编译输出的 `libParentControlBridge.so` 直接放入 Android 工程的 `app/src/main/jniLibs/arm64-v8a/` 目录下。
+The compiled `libParentControlBridge.so` is placed into the Android project's `app/src/main/jniLibs/arm64-v8a/` directory.
 
 ---
 
-## 3. Kotlin JNI 调用与 Coroutine 封装
+## 3. Kotlin JNI Invocation & Coroutine Wrapping
 
-### 3.1 JNI 接口层 (`NativeBridge.kt`)
+### 3.1 JNI Interface Layer (`NativeBridge.kt`)
 ```kotlin
 package com.parentcontrol.core
 
@@ -75,8 +75,8 @@ object NativeBridge {
 }
 ```
 
-### 3.2 Kotlin 协程层 (`ParentControlRepository.kt`)
-通过 `suspendCoroutine` 将 Swift 异步回调转换为 Kotlin 标准协程：
+### 3.2 Kotlin Coroutine Layer (`ParentControlRepository.kt`)
+Using `suspendCoroutine` to wrap Swift async callbacks into standard Kotlin coroutines:
 
 ```kotlin
 suspend fun fetchStatus(): Result<SystemStatus> = suspendCoroutine { continuation ->

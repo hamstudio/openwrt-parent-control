@@ -8,16 +8,16 @@ struct AppSelectorView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("深度应用封禁 (L7 DPI)")
+                Text("L7 DPI App Restrictions")
                     .font(.subheadline.bold())
                 Spacer()
-                Text("已选 \(selectedAppIDs.count) 款 App")
+                Text("\(selectedAppIDs.count) Selected")
                     .font(.caption)
                     .foregroundColor(.guardianGreen)
             }
 
             if categories.isEmpty {
-                Text("加载特征库中...")
+                Text("Loading app signatures...")
                     .font(.caption)
                     .foregroundColor(.secondary)
             } else {
@@ -59,7 +59,7 @@ struct CategoryAppGroupView: View {
                 Button {
                     toggleSelectAll()
                 } label: {
-                    Text(isAllSelected ? "取消全选" : "全选")
+                    Text(isAllSelected ? "Deselect All" : "Select All")
                         .font(.caption2)
                         .foregroundColor(.guardianGreen)
                 }
@@ -124,7 +124,7 @@ struct CategoryAppGroupView: View {
     }
 }
 
-// MARK: - FlowLayout 标签流式排版
+// MARK: - FlowLayout Tag Flow Layout
 struct FlowLayout: Layout {
     var spacing: CGFloat = 6
 

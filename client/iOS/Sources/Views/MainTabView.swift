@@ -3,25 +3,26 @@ import ParentControlCore
 
 struct MainTabView: View {
     @EnvironmentObject var appState: AppState
+    @ObservedObject var i18n = I18n.shared
     @State private var selectedTab = 0
 
     var body: some View {
         TabView(selection: $selectedTab) {
             DashboardView()
                 .tabItem {
-                    Label("家庭管控", systemImage: "person.3.sequence.fill")
+                    Label(i18n.t("tabMembers"), systemImage: "person.3.sequence.fill")
                 }
                 .tag(0)
 
             DevicesListView()
                 .tabItem {
-                    Label("设备列表", systemImage: "laptopcomputer.and.iphone")
+                    Label(i18n.t("tabDevices"), systemImage: "laptopcomputer.and.iphone")
                 }
                 .tag(1)
 
             SettingsView()
                 .tabItem {
-                    Label("安全设置", systemImage: "shield.checkered")
+                    Label(i18n.t("tabSettings"), systemImage: "shield.checkered")
                 }
                 .tag(2)
         }

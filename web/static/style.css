@@ -1,6 +1,6 @@
-/* 自定义增强样式 - 绿色健康守护主题 */
+/* Custom Enhanced Styles - Green Health Guardian Theme */
 @layer utilities {
-    /* 滚动条美化 */
+    /* Custom scrollbar styling */
     ::-webkit-scrollbar {
         width: 6px;
         height: 6px;
@@ -22,7 +22,7 @@
     line-height: 2.25rem;
 }
 
-/* 进度条动画 */
+/* Progress bar animation */
 .transition-width {
     transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -31,7 +31,7 @@
     box-shadow: 0 0 15px -3px rgba(16, 185, 129, 0.3);
 }
 
-/* 标签动画 */
+/* Badge pulse animation */
 .badge-pulse {
     animation: badgePulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
@@ -41,7 +41,7 @@
     50% { opacity: .6; }
 }
 
-/* Toast 提示动画 */
+/* Toast notification animations */
 .toast-enter {
     transform: translateY(-20px) scale(0.95);
     opacity: 0;
@@ -57,7 +57,7 @@
     transition: all 0.25s ease-in;
 }
 
-/* 状态微光边框效果 */
+/* Status subtle glow borders */
 .border-locked {
     border-color: rgba(239, 68, 68, 0.4) !important;
     box-shadow: 0 0 15px -3px rgba(239, 68, 68, 0.15);
@@ -68,7 +68,7 @@
     box-shadow: 0 0 15px -3px rgba(245, 158, 11, 0.15);
 }
 
-/* 骨架屏微光动画 */
+/* Skeleton shimmer animation */
 @keyframes shimmer {
     0% { background-position: -200% 0; }
     100% { background-position: 200% 0; }
@@ -86,7 +86,7 @@
     animation: shimmer 1.5s infinite ease-in-out;
 }
 
-/* 顶部轻量加载进度条 */
+/* Top lightweight progress bar */
 #globalProgressBar {
     position: fixed;
     top: 0;

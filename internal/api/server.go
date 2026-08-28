@@ -18,9 +18,10 @@ import (
 	"parentcontrol/internal/models"
 	"parentcontrol/internal/quota"
 	"parentcontrol/internal/safedns"
+	"parentcontrol/internal/tz"
 )
 
-// Server 统一 API 与 Web 服务
+// Server manages unified API and Web services
 type Server struct {
 	engine     *quota.PolicyEngine
 	dpiMgr     *dpi.DPIManager
@@ -32,7 +33,7 @@ type Server struct {
 	startTime  time.Time
 }
 
-// NewServer 创建 API 服务实例
+// NewServer creates a new API server instance
 func NewServer(
 	engine *quota.PolicyEngine,
 	dpiMgr *dpi.DPIManager,
@@ -54,15 +55,15 @@ func NewServer(
 	}
 }
 
-// Start 注册路由并启动 HTTP 监听
+// Start registers routes and begins listening for HTTP requests
 func (s *Server) Start(port int) error {
 	mux := http.NewServeMux()
 
-	// 1. 认证与公开路由
+	// 1. Authentication and public routes
 	mux.HandleFunc("/api/status", s.handleStatus)
 	mux.HandleFunc("/api/auth/login", s.handleAuthLogin)
 
-	// 2. 核心业务受保护路由
+	// 2. Core protected API routes
 	mux.HandleFunc("/api/devices", s.requireAuth(s.handleDevices))
 	mux.HandleFunc("/api/devices/", s.requireAuth(s.handleDeviceActions))
 	mux.HandleFunc("/api/members", s.requireAuth(s.handleMembers))
@@ -72,7 +73,7 @@ func (s *Server) Start(port int) error {
 	mux.HandleFunc("/api/categories", s.requireAuth(s.handleCategories))
 	mux.HandleFunc("/api/settings", s.requireAuth(s.handleSettings))
 
-	// 3. 静态文件与前端 WebUI
+	// 3. Static files and frontend Web UI
 	staticSub, err := fs.Sub(s.staticFS, "static")
 	if err != nil {
 		log.Printf("[API] Failed to sub static FS: %v", err)
@@ -94,7 +95,7 @@ func (s *Server) Start(port int) error {
 		})
 	}
 
-	// 全局中间件：支持 iframe 嵌入与跨域调试
+	// Global middleware: support iframe embedding and cross-origin debugging
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
@@ -109,7 +110,7 @@ func (s *Server) Start(port int) error {
 	addr := fmt.Sprintf("0.0.0.0:%d", port)
 	log.Printf("[API] ParentControl HTTP dashboard listening on http://%s", addr)
 
-	// 智能配置与启动 HTTPS 监听 (port + 1，如 8089)
+	// Smart TLS configuration and HTTPS listener (port + 1, e.g. 8089)
 	tlsConfig, err := LoadOrCreateTLSConfig()
 	if err == nil && tlsConfig != nil {
 		httpsPort := port + 1
@@ -136,12 +137,12 @@ func (s *Server) jsonResponse(w http.ResponseWriter, status int, data interface{
 	_ = json.NewEncoder(w).Encode(data)
 }
 
-// requireAuth PIN 码权限校验中间件
+// requireAuth PIN code validation middleware
 func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		pinRequired := s.config.Data.Settings.PinCode
 		if pinRequired != "" {
-			// 从 Header、Cookie 或 Query 获取
+			// Extract from Header, Bearer token, or Query parameter
 			pin := r.Header.Get("X-Pin-Code")
 			if pin == "" {
 				authHeader := r.Header.Get("Authorization")
@@ -187,7 +188,7 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	} else {
 		s.jsonResponse(w, http.StatusUnauthorized, map[string]interface{}{
 			"success": false,
-			"error":   "PIN 码错误",
+			"error":   "Incorrect PIN",
 		})
 	}
 }
@@ -203,6 +204,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 	members := s.engine.GetMembers()
 
+	zoneName, offset := tz.GetTimezoneInfo()
 	status := models.SystemStatus{
 		Running:           true,
 		UptimeSeconds:     int64(time.Since(s.startTime).Seconds()),
@@ -212,7 +214,9 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		KernelDPIReady:    s.dpiMgr.IsReady(),
 		AppCount:          len(s.dpiMgr.GetCategories()),
 		PinRequired:       s.config.Data.Settings.PinCode != "",
-		ServerTime:        time.Now(),
+		ServerTime:        tz.Now(),
+		TimezoneName:      zoneName,
+		TimezoneOffset:    offset,
 	}
 	s.jsonResponse(w, http.StatusOK, status)
 }
@@ -222,7 +226,7 @@ func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request) {
 	members := s.engine.GetMembers()
 	settings := s.engine.GetSettings()
 
-	// 构建 MAC -> Member 映射与黑名单集合
+	// Build MAC -> Member mapping and blacklist set
 	macToMember := make(map[string]*models.Member)
 	for _, m := range members {
 		for _, mac := range m.DeviceMACs {
@@ -261,7 +265,7 @@ func (s *Server) handleDeviceActions(w http.ResponseWriter, r *http.Request) {
 
 	mac := parts[0]
 
-	// 1. POST /api/devices/:mac/lock (单设备一键断网)
+	// 1. POST /api/devices/:mac/lock (One-click block single device)
 	if r.Method == http.MethodPost && len(parts) == 2 && parts[1] == "lock" {
 		s.engine.LockDevice(mac)
 		s.config.Data.Settings = s.engine.GetSettings()
@@ -272,7 +276,7 @@ func (s *Server) handleDeviceActions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. POST /api/devices/:mac/unlock (单设备恢复上网)
+	// 2. POST /api/devices/:mac/unlock (Restore internet access for single device)
 	if r.Method == http.MethodPost && len(parts) == 2 && parts[1] == "unlock" {
 		s.engine.UnlockDevice(mac)
 		s.config.Data.Settings = s.engine.GetSettings()
@@ -283,7 +287,7 @@ func (s *Server) handleDeviceActions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 3. POST /api/devices/:mac/assign (分配已有成员或解绑)
+	// 3. POST /api/devices/:mac/assign (Assign device to member or unbind)
 	if r.Method == http.MethodPost && len(parts) == 2 && parts[1] == "assign" {
 		var req struct {
 			MemberID string `json:"member_id"`
@@ -384,11 +388,11 @@ func (s *Server) handleMembers(w http.ResponseWriter, r *http.Request) {
 		}
 		s.engine.SetMember(m)
 
-		// 持久化保存
+		// Persist changes
 		s.config.Data.Members = s.engine.GetMembers()
 		_ = s.config.Save()
 
-		// 立即触发规则同步
+		// Trigger immediate rule evaluation
 		s.engine.EvaluateAndApply(time.Now())
 
 		s.jsonResponse(w, http.StatusOK, m)
@@ -423,6 +427,9 @@ func (s *Server) handleMemberActions(w http.ResponseWriter, r *http.Request) {
 			s.jsonResponse(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 			return
 		}
+		s.config.Data.Members = s.engine.GetMembers()
+		s.config.Data.Settings = s.engine.GetSettings()
+		_ = s.config.Save()
 		s.engine.EvaluateAndApply(time.Now())
 		s.jsonResponse(w, http.StatusOK, map[string]string{"status": "locked"})
 		return
@@ -434,6 +441,9 @@ func (s *Server) handleMemberActions(w http.ResponseWriter, r *http.Request) {
 			s.jsonResponse(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 			return
 		}
+		s.config.Data.Members = s.engine.GetMembers()
+		s.config.Data.Settings = s.engine.GetSettings()
+		_ = s.config.Save()
 		s.engine.EvaluateAndApply(time.Now())
 		s.jsonResponse(w, http.StatusOK, map[string]string{"status": "unlocked"})
 		return
@@ -449,6 +459,9 @@ func (s *Server) handleMemberActions(w http.ResponseWriter, r *http.Request) {
 			s.jsonResponse(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 			return
 		}
+		s.config.Data.Members = s.engine.GetMembers()
+		s.config.Data.Settings = s.engine.GetSettings()
+		_ = s.config.Save()
 		s.engine.EvaluateAndApply(time.Now())
 		s.jsonResponse(w, http.StatusOK, map[string]string{"status": "bonus_applied", "minutes": strconv.Itoa(minutes)})
 		return
@@ -473,10 +486,10 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		s.config.Data.Settings = req
 		_ = s.config.Save()
 
-		// 重新应用 DNS 与 SafeSearch
+		// Re-apply DNS and SafeSearch rules
 		_ = s.dnsMgr.ApplyConfig(req.EnforceSafeSearch, true, req.CustomBlacklist, req.CustomWhitelist)
 
-		// 立即评估规则
+		// Trigger immediate rule evaluation
 		s.engine.EvaluateAndApply(time.Now())
 
 		s.jsonResponse(w, http.StatusOK, req)

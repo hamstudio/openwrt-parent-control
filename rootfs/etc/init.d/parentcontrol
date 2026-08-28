@@ -11,11 +11,14 @@ CONF_FILE=/etc/parentcontrol/config.json
 start_service() {
     [ -d "$CONF_DIR" ] || mkdir -p "$CONF_DIR"
     
-    # 确保 kmod-oaf 已加载
+    # Ensure kmod-oaf is loaded
     [ -e "/dev/appfilter" ] || insmod oaf 2>/dev/null
+    
+    local tz="$(cat /etc/TZ 2>/dev/null || echo 'CST-8')"
     
     procd_open_instance
     procd_set_param command "$PROG" -config "$CONF_FILE" -port 8088
+    [ -n "$tz" ] && procd_set_param env TZ="$tz"
     procd_set_param respawn 3600 5 5
     procd_set_param stdout 1
     procd_set_param stderr 1
@@ -24,9 +27,9 @@ start_service() {
 }
 
 stop_service() {
-    # 优雅停止 parentcontrold
+    # Gracefully terminate parentcontrold
     killall -TERM parentcontrold 2>/dev/null
-    # 清理 iptables 自定义链
+    # Clean up iptables custom chains
     iptables -t filter -D FORWARD -j PARENT_CONTROL_FWD 2>/dev/null
     iptables -t nat -D PREROUTING -j PARENT_CONTROL_NAT_PRE 2>/dev/null
     iptables -t filter -F PARENT_CONTROL_FWD 2>/dev/null

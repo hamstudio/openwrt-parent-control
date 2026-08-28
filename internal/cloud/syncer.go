@@ -18,7 +18,7 @@ import (
 	"parentcontrol/internal/quota"
 )
 
-// Syncer 负责路由器与 Cloudflare Worker 公网中继之间的出站双向同步
+// Syncer handles outbound bidirectional sync between router and Cloudflare Worker
 type Syncer struct {
 	engine     *quota.PolicyEngine
 	devTracker *device.DeviceTracker
@@ -27,7 +27,7 @@ type Syncer struct {
 	httpClient *http.Client
 }
 
-// NewSyncer 创建同步器实例
+// NewSyncer creates a new Syncer instance
 func NewSyncer(
 	engine *quota.PolicyEngine,
 	devTracker *device.DeviceTracker,
@@ -45,47 +45,166 @@ func NewSyncer(
 	}
 }
 
-// SetHTTPTransport 设置自定义 Transport (用于测试与内存 Mock)
+// SetHTTPTransport sets custom Transport (for testing with mock servers)
 func (s *Syncer) SetHTTPTransport(tr http.RoundTripper) {
 	s.httpClient.Transport = tr
 }
 
-// Start 启动后台同步与长轮询协程
+// Start launches background state sync and real-time command listener
 func (s *Syncer) Start(ctx context.Context) {
 	log.Printf("[CloudSyncer] Cloud synchronization daemon started")
 
-	// 1. 周期性全量状态上报协程 (每 15 秒)
-	go func() {
-		ticker := time.NewTicker(15 * time.Second)
-		defer ticker.Stop()
-
-		// 启动立即同步一次
-		s.syncState()
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				s.syncState()
-			}
-		}
-	}()
-
-	// 2. 长轮询指令监听协程 (秒级实时响应)
+	// 主控分发协程：根据配置 URL 自适应启动 WebSocket 长连接或 HTTP 轮询
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			default:
-				s.pollAndExecuteCommands()
+				settings := s.config.Data.Settings
+				if !settings.CloudSyncEnabled || strings.TrimSpace(settings.CloudWorkerURL) == "" {
+					time.Sleep(3 * time.Second)
+					continue
+				}
+
+				rawURL := strings.TrimSpace(settings.CloudWorkerURL)
+				if strings.HasPrefix(rawURL, "ws://") || strings.HasPrefix(rawURL, "wss://") {
+					// 启动 WebSocket 双向实时长连接
+					s.runWebSocketLoop(ctx, rawURL, settings.CloudDeviceSecret)
+				} else {
+					// 启动标准 HTTP 轮询同步
+					s.runHTTPLoop(ctx)
+				}
 			}
 		}
 	}()
 }
 
-// syncState 上报本地当前状态并处理附带的指令
+// runWebSocketLoop 维持与云端中继的持久化 WebSocket 长连接 (毫秒级双向即时推流)
+func (s *Syncer) runWebSocketLoop(ctx context.Context, wsURL string, secret string) {
+	// 确保路径指向 /ws/router
+	if !strings.Contains(wsURL, "/ws") {
+		wsURL = strings.TrimRight(wsURL, "/") + "/ws/router"
+	}
+
+	log.Printf("[CloudSyncer] Connecting to Cloud Relay WebSocket: %s", wsURL)
+	ws, err := DialWebSocket(wsURL, secret)
+	if err != nil {
+		log.Printf("[CloudSyncer] WebSocket connection failed: %v, retrying in 5s...", err)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(5 * time.Second):
+			return
+		}
+	}
+	defer ws.Close()
+
+	log.Printf("[CloudSyncer] Connected to Cloud Relay Server successfully via WebSocket!")
+
+	// 1. 发送初始状态
+	s.sendWSState(ws, secret)
+
+	// 2. 定时上报状态与保活心跳 (每 15 秒)
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := s.sendWSState(ws, secret); err != nil {
+					return
+				}
+			}
+		}
+	}()
+
+	// 3. 阻塞监听接收来自云端中继的即时指令
+	for {
+		msgStr, err := ws.ReadMessage()
+		if err != nil {
+			log.Printf("[CloudSyncer] WebSocket read ended: %v", err)
+			break
+		}
+
+		var msg struct {
+			Type    string                `json:"type"`
+			Payload json.RawMessage       `json:"payload"`
+		}
+		if err := json.Unmarshal([]byte(msgStr), &msg); err == nil {
+			if msg.Type == "command" && len(msg.Payload) > 0 {
+				var cmd models.CloudCommand
+				if err := json.Unmarshal(msg.Payload, &cmd); err == nil && cmd.Type != "" {
+					log.Printf("[CloudSyncer] Received instant command via WebSocket: %s (%s)", cmd.ID, cmd.Type)
+					s.executeCommands([]models.CloudCommand{cmd})
+					// 状态变更后立即上报最新状态
+					_ = s.sendWSState(ws, secret)
+				}
+			}
+		}
+	}
+}
+
+// sendWSState 通过 WebSocket 上报本机状态
+func (s *Syncer) sendWSState(ws *WSClientConn, secret string) error {
+	devices := s.devTracker.ScanDevices()
+	activeCount := 0
+	for _, d := range devices {
+		if d.Online {
+			activeCount++
+		}
+	}
+
+	members := s.engine.GetMembers()
+	settings := s.config.Data.Settings
+
+	status := models.SystemStatus{
+		Running:        true,
+		TotalDevices:   len(devices),
+		ActiveDevices:  activeCount,
+		ManagedMembers: len(members),
+		KernelDPIReady: s.dpiMgr.IsReady(),
+		AppCount:       len(s.dpiMgr.GetCategories()),
+		PinRequired:    settings.PinCode != "",
+		ServerTime:     time.Now(),
+	}
+
+	statePayload := map[string]interface{}{
+		"status":     status,
+		"members":    members,
+		"devices":    devices,
+		"categories": s.dpiMgr.GetCategories(),
+		"settings":   settings,
+	}
+
+	payloadBytes, err := json.Marshal(statePayload)
+	if err != nil {
+		return err
+	}
+
+	msg := map[string]interface{}{
+		"type":      "state_update",
+		"secret":    secret,
+		"timestamp": time.Now().Unix(),
+		"payload":   json.RawMessage(payloadBytes),
+	}
+
+	msgBytes, _ := json.Marshal(msg)
+	return ws.WriteMessage(string(msgBytes))
+}
+
+// runHTTPLoop 维持原有的 HTTP 轮询模式
+func (s *Syncer) runHTTPLoop(ctx context.Context) {
+	// 定期上报
+	s.syncState()
+	// 轮询长轮询指令
+	s.pollAndExecuteCommands()
+}
+
+// syncState reports local state and handles returned pending commands
 func (s *Syncer) syncState() {
 	settings := s.config.Data.Settings
 	if !settings.CloudSyncEnabled || strings.TrimSpace(settings.CloudWorkerURL) == "" {
@@ -161,7 +280,7 @@ func (s *Syncer) syncState() {
 	}
 }
 
-// pollAndExecuteCommands 挂起长轮询拉取指令
+// pollAndExecuteCommands performs long-polling to pull pending cloud commands
 func (s *Syncer) pollAndExecuteCommands() {
 	settings := s.config.Data.Settings
 	if !settings.CloudSyncEnabled || strings.TrimSpace(settings.CloudWorkerURL) == "" {
@@ -207,7 +326,7 @@ func (s *Syncer) pollAndExecuteCommands() {
 	}
 }
 
-// executeCommands 派发指令并在本地 PolicyEngine 中生效
+// executeCommands dispatches commands and applies them to the local PolicyEngine
 func (s *Syncer) executeCommands(commands []models.CloudCommand) {
 	needSaveConfig := false
 
@@ -271,6 +390,6 @@ func (s *Syncer) executeCommands(commands []models.CloudCommand) {
 		_ = s.config.Save()
 	}
 
-	// 立即触发规则重评与内核应用
+	// Trigger immediate rule re-evaluation and kernel application
 	s.engine.EvaluateAndApply(time.Now())
 }

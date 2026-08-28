@@ -1,6 +1,6 @@
 {
 	"admin/services/parentcontrol": {
-		"title": "家长控制",
+		"title": "Parent Control",
 		"action": {
 			"type": "view",
 			"path": "parentcontrol/overview"

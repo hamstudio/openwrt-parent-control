@@ -16,6 +16,7 @@ import (
 	"parentcontrol/internal/firewall"
 	"parentcontrol/internal/quota"
 	"parentcontrol/internal/safedns"
+	"parentcontrol/internal/tz"
 	"parentcontrol/web"
 )
 
@@ -29,22 +30,28 @@ func main() {
 	log.Println("  ParentControl Daemon (Go + kmod-oaf DPI Engine)")
 	log.Println("==================================================")
 
-	// 1. 初始化配置
+	// 0. Automatically detect and apply router system timezone
+	tz.DetectAndApplyTimezone()
+	zoneName, offset := tz.GetTimezoneInfo()
+	log.Printf("[Main] System timezone: %s (%s, offset: %d min, local time: %s)", 
+		tz.GetCurrentZonename(), zoneName, offset/60, tz.Now().Format("2006-01-02 15:04:05 MST"))
+
+	// 1. Initialize configuration
 	cfgStore := config.NewConfigStore(*configPath)
 
-	// 2. 初始化 DPI 引擎
+	// 2. Initialize DPI engine
 	dpiMgr := dpi.NewDPIManager(*featurePath)
 	if len(cfgStore.Data.CustomApps) > 0 || len(cfgStore.Data.CustomCategories) > 0 {
 		dpiMgr.LoadCustomData(cfgStore.Data.CustomApps, cfgStore.Data.CustomCategories)
 	}
 
-	// 3. 初始化防火墙管理器
+	// 3. Initialize firewall manager
 	fwMgr := firewall.NewFirewallManager()
 	if err := fwMgr.Init(); err != nil {
 		log.Printf("[Main] Warning: Firewall init returned: %v", err)
 	}
 
-	// 4. 初始化 SafeDNS
+	// 4. Initialize SafeDNS
 	dnsMgr := safedns.NewSafeDNSManager("/tmp/dnsmasq.d/parentcontrol.conf")
 	_ = dnsMgr.ApplyConfig(
 		cfgStore.Data.Settings.EnforceSafeSearch,
@@ -53,22 +60,22 @@ func main() {
 		cfgStore.Data.Settings.CustomWhitelist,
 	)
 
-	// 5. 初始化设备追踪器
+	// 5. Initialize device tracker
 	devTracker := device.NewDeviceTracker()
 
-	// 6. 初始化策略与配额引擎
+	// 6. Initialize policy and quota engine
 	engine := quota.NewPolicyEngine(fwMgr, dpiMgr, devTracker)
 	engine.UpdateSettings(cfgStore.Data.Settings)
 
-	// 载入已有成员
+	// Load existing members
 	for _, m := range cfgStore.Data.Members {
 		engine.SetMember(m)
 	}
 
-	// 启动策略后台循环
+	// Start policy background evaluation loop
 	engine.Start()
 
-	// 7. 注册信号处理 (优雅关机清理防火墙)
+	// 7. Register signal handler (graceful shutdown and firewall cleanup)
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
@@ -80,11 +87,11 @@ func main() {
 		os.Exit(0)
 	}()
 
-	// 8. 启动 Cloudflare Worker 云端同步器
+	// 8. Start Cloudflare Worker cloud syncer
 	syncer := cloud.NewSyncer(engine, devTracker, dpiMgr, cfgStore)
 	syncer.Start(context.Background())
 
-	// 9. 启动 Web 控制台与 API
+	// 9. Start Web console and API
 	webPort := cfgStore.Data.Settings.WebPort
 	if *port != 8088 {
 		webPort = *port

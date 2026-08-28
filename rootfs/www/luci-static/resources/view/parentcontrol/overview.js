@@ -43,53 +43,53 @@ return view.extend({
 		var httpUrl = 'http://' + host + ':' + basePort;
 
 		var statusBadge = isRunning 
-			? E('span', { 'class': 'badge', 'style': 'background:#10b981; color:#fff; padding:3px 8px; border-radius:4px; font-weight:bold;' }, _('运行中 (Running)'))
-			: E('span', { 'class': 'badge', 'style': 'background:#ef4444; color:#fff; padding:3px 8px; border-radius:4px; font-weight:bold;' }, _('未运行 (Stopped)'));
+			? E('span', { 'class': 'badge', 'style': 'background:#10b981; color:#fff; padding:3px 8px; border-radius:4px; font-weight:bold;' }, _('Running'))
+			: E('span', { 'class': 'badge', 'style': 'background:#ef4444; color:#fff; padding:3px 8px; border-radius:4px; font-weight:bold;' }, _('Stopped'));
 
 		var viewRoot = E('div', { 'class': 'cbi-map' }, [
-			E('h2', { 'style': 'margin-bottom:4px;' }, _('家长控制与应用安全管控系统 (ParentControl Guard)')),
-			E('div', { 'class': 'cbi-map-descr', 'style': 'margin-bottom:16px;' }, _('基于 kmod-oaf 七层深度包检测 (DPI)、时间配额调度与 Cloudflare Worker 公网同步。')),
+			E('h2', { 'style': 'margin-bottom:4px;' }, _('ParentControl Guard')),
+			E('div', { 'class': 'cbi-map-descr', 'style': 'margin-bottom:16px;' }, _('Layer-7 Deep Packet Inspection (DPI), quota scheduling, and Cloudflare Worker cloud synchronization.')),
 
-			// 状态与快捷操作卡片
+			// Status and quick action cards
 			E('div', { 'class': 'cbi-section' }, [
 				E('div', { 'class': 'cbi-section-node' }, [
 					E('div', { 'class': 'cbi-value' }, [
-						E('label', { 'class': 'cbi-value-title' }, _('服务运行状态')),
+						E('label', { 'class': 'cbi-value-title' }, _('Service Status')),
 						E('div', { 'class': 'cbi-value-field', 'id': 'pc-status-field' }, [ statusBadge ])
 					]),
 					E('div', { 'class': 'cbi-value' }, [
-						E('label', { 'class': 'cbi-value-title' }, _('控制台地址')),
+						E('label', { 'class': 'cbi-value-title' }, _('Dashboard URL')),
 						E('div', { 'class': 'cbi-value-field' }, [
 							E('a', {
 								'class': 'btn cbi-button cbi-button-apply',
 								'href': dashboardUrl,
 								'target': '_blank',
 								'style': 'background:#059669; color:#fff; padding:6px 14px; border-radius:6px; text-decoration:none; font-weight:bold; display:inline-block; margin-right:8px;'
-							}, [ _('↗ 新窗口全屏打开控制台 (%s)').format(isHttps ? 'HTTPS :8089' : 'HTTP :8088') ]),
+							}, [ _('↗ Open Dashboard in New Tab (%s)').format(isHttps ? 'HTTPS :8089' : 'HTTP :8088') ]),
 							E('a', {
 								'class': 'btn cbi-button cbi-button-neutral',
 								'href': httpUrl,
 								'target': '_blank',
 								'style': 'padding:6px 12px; border-radius:6px; text-decoration:none; display:inline-block;'
-							}, [ _('HTTP 直连 (:8088)') ]),
-							E('div', { 'class': 'cbi-value-description', 'style': 'margin-top:6px;' }, _('已自动启用与系统一致的 SSL 证书加密。支持移动端与桌面端自适应、4位数密码访问控制。'))
+							}, [ _('HTTP Direct (:8088)') ]),
+							E('div', { 'class': 'cbi-value-description', 'style': 'margin-top:6px;' }, _('Automatically uses SSL certificate encryption. Supports mobile/desktop adaptive UI and 4-digit PIN protection.'))
 						])
 					])
 				])
 			]),
 
-			// 内嵌控制台与 SSL 信任指引
+			// Embedded console and SSL guidance
 			E('div', { 'class': 'cbi-section', 'style': 'margin-top:16px;' }, [
 				E('div', { 'style': 'display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;' }, [
-					E('h3', { 'style': 'margin:0;' }, _('内嵌控制面板')),
+					E('h3', { 'style': 'margin:0;' }, _('Embedded Dashboard')),
 					isHttps ? E('div', { 'class': 'text-xs', 'style': 'font-size:12px; color:#64748b;' }, [
-						_('若内嵌显示证书错误，请先 '),
+						_('If certificate warning is shown in iframe, please '),
 						E('a', {
 							'href': dashboardUrl,
 							'target': '_blank',
 							'style': 'color:#059669; font-weight:bold; text-decoration:underline;'
-						}, [ _('点击这里在新标签页信任证书') ]),
-						_(' 或直接使用上方直达按钮')
+						}, [ _('click here to accept cert in a new tab') ]),
+						_(' or use the button above directly.')
 					]) : E('span', {})
 				]),
 				E('div', {

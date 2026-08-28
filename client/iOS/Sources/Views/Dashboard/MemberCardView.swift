@@ -4,11 +4,14 @@ import ParentControlCore
 struct MemberCardView: View {
     let member: Member
     @EnvironmentObject var appState: AppState
+    @ObservedObject var i18n = I18n.shared
+
     @State private var showingEditSheet = false
+    @State private var showingBonusSheet = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            // 头部信息
+            // Header Info
             HStack(spacing: 12) {
                 Text(avatarEmoji(for: member.avatar))
                     .font(.system(size: 32))
@@ -25,7 +28,7 @@ struct MemberCardView: View {
                         statusBadge
                     }
 
-                    Text("绑定 \(member.deviceMACs.count) 台设备 · 限制 \(member.blockedAppIDs.count) 款 App")
+                    Text("\(member.deviceMACs.count) \(i18n.t("statDevices")) · \(member.blockedAppIDs.count) \(i18n.t("statApps"))")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -45,7 +48,7 @@ struct MemberCardView: View {
                 }
             }
 
-            // 多时间段管控摘要
+            // Multi-time-range Schedule Summary
             if member.schedule.enabled && !member.schedule.timeRanges.isEmpty {
                 HStack(spacing: 6) {
                     Image(systemName: "clock.badge.checkmark")
@@ -63,14 +66,14 @@ struct MemberCardView: View {
                 .cornerRadius(8)
             }
 
-            // 时长配额进度
+            // Time Quota Progress
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text("今日活跃上网时长")
+                    Text(i18n.t("todayUsage"))
                         .font(.caption)
                         .foregroundColor(.secondary)
                     Spacer()
-                    Text("\(member.usedMinutes) / \(member.quotaMinutes > 0 ? "\(member.quotaMinutes) 分钟" : "不限时")")
+                    Text("\(member.usedMinutes) / \(member.quotaMinutes > 0 ? "\(member.quotaMinutes) \(i18n.t("minutes"))" : i18n.t("unlimited"))")
                         .font(.caption.bold())
                         .foregroundColor(.primary)
                 }
@@ -93,14 +96,14 @@ struct MemberCardView: View {
             .background(Color.adaptiveSecondaryBackground)
             .cornerRadius(12)
 
-            // 操作按钮组
+            // Action Buttons
             HStack(spacing: 10) {
                 if member.isLocked {
                     Button {
                         HapticManager.impact(.medium)
                         Task { await appState.unlockMember(id: member.id) }
                     } label: {
-                        Label("恢复上网", systemImage: "lock.open.fill")
+                        Label(i18n.t("btnUnlock"), systemImage: "lock.open.fill")
                             .font(.subheadline.bold())
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
@@ -113,7 +116,7 @@ struct MemberCardView: View {
                         HapticManager.impact(.heavy)
                         Task { await appState.lockMember(id: member.id) }
                     } label: {
-                        Label("一键断网", systemImage: "lock.fill")
+                        Label(i18n.t("btnLock"), systemImage: "lock.fill")
                             .font(.subheadline.bold())
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
@@ -124,10 +127,10 @@ struct MemberCardView: View {
                 }
 
                 Button {
+                    showingBonusSheet = true
                     HapticManager.impact(.medium)
-                    Task { await appState.bonusMember(id: member.id, minutes: 30) }
                 } label: {
-                    Label("奖励 +30分", systemImage: "plus.circle.fill")
+                    Label(i18n.t("btnBonus"), systemImage: "plus.circle.fill")
                         .font(.subheadline.bold())
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
@@ -144,11 +147,29 @@ struct MemberCardView: View {
         .sheet(isPresented: $showingEditSheet) {
             MemberEditorView(member: member)
         }
+        .confirmationDialog(
+            i18n.t("bonusModalTitle"),
+            isPresented: $showingBonusSheet,
+            titleVisibility: .visible
+        ) {
+            Button(i18n.t("bonus15m")) { grantBonus(15) }
+            Button(i18n.t("bonus30m")) { grantBonus(30) }
+            Button(i18n.t("bonus1h")) { grantBonus(60) }
+            Button(i18n.t("bonus2h")) { grantBonus(120) }
+            Button(i18n.t("cancel"), role: .cancel) {}
+        }
+    }
+
+    private func grantBonus(_ minutes: Int) {
+        HapticManager.notification(.success)
+        Task {
+            await appState.bonusMember(id: member.id, minutes: minutes)
+        }
     }
 
     private var scheduleSummaryText: String {
         let isBlock = (member.schedule.action == "block")
-        let actionStr = isBlock ? "🚫 禁网" : "✅ 允许"
+        let actionStr = isBlock ? "🚫 \(i18n.t("scheduleActionBlock"))" : "✅ \(i18n.t("scheduleActionAllow"))"
         let rangesStr = member.schedule.timeRanges.map { "\($0.startTime)~\($0.endTime)" }.joined(separator: ", ")
         return "\(actionStr): \(rangesStr)"
     }
@@ -156,7 +177,7 @@ struct MemberCardView: View {
     private var statusBadge: some View {
         Group {
             if member.isLocked {
-                Text("已断网")
+                Text(i18n.t("locked"))
                     .font(.caption2.bold())
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -164,7 +185,7 @@ struct MemberCardView: View {
                     .foregroundColor(.red)
                     .cornerRadius(6)
             } else if member.isBonusActive {
-                Text("加时中")
+                Text(i18n.t("bonusActive"))
                     .font(.caption2.bold())
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -172,7 +193,7 @@ struct MemberCardView: View {
                     .foregroundColor(.orange)
                     .cornerRadius(6)
             } else if member.isQuotaExceeded {
-                Text("限额耗尽")
+                Text(i18n.t("locked"))
                     .font(.caption2.bold())
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -180,7 +201,7 @@ struct MemberCardView: View {
                     .foregroundColor(.orange)
                     .cornerRadius(6)
             } else {
-                Text("正常")
+                Text(i18n.t("normalOnline"))
                     .font(.caption2.bold())
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -203,7 +224,6 @@ struct MemberCardView: View {
 
     private func avatarEmoji(for avatar: String) -> String {
         switch avatar {
-        case "boy": return "👦"
         case "girl": return "👧"
         case "student": return "🧑‍🎓"
         case "child": return "👶"

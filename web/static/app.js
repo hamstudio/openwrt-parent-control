@@ -1,5 +1,5 @@
-// 家长控制系统前端交互逻辑 - 完整全功能版
-// 安全兜底保护
+// ParentControl Guard Frontend Logic - Full Feature Edition
+// Fallback protection
 if (typeof window.t !== 'function') window.t = (k) => k;
 if (typeof window.getLocale !== 'function') window.getLocale = () => 'zh-CN';
 if (typeof window.tDpiCategory !== 'function') window.tDpiCategory = (name) => name;
@@ -15,7 +15,7 @@ let appState = {
     editingAppCatId: null
 };
 
-// 获取已存储的 PIN 码
+// Retrieve stored PIN code
 function getStoredPin() {
     return localStorage.getItem('parentcontrol_pin') || '';
 }
@@ -28,7 +28,7 @@ function setStoredPin(pin) {
     }
 }
 
-// 封装带 PIN 鉴权的 Fetch
+// Fetch wrapper with PIN authentication
 async function authFetch(url, options = {}) {
     options.headers = options.headers || {};
     const pin = getStoredPin();
@@ -48,7 +48,7 @@ async function authFetch(url, options = {}) {
     return res;
 }
 
-// PIN 码输入键盘逻辑
+// PIN Code Keypad Modal Logic
 function openPinLockModal() {
     appState.currentPinInput = '';
     updatePinDots();
@@ -125,7 +125,7 @@ async function submitPinVerification() {
     }
 }
 
-// 物理键盘监听
+// Physical Keyboard Listener
 document.addEventListener('keydown', (e) => {
     const modal = document.getElementById('pinLockModal');
     if (!modal.classList.contains('hidden')) {
@@ -139,7 +139,7 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-// Toast 提示通知系统
+// Toast Notification System
 function showToast(message, type = 'success') {
     const container = document.getElementById('toastContainer');
     if (!container) return;
@@ -180,7 +180,7 @@ function showToast(message, type = 'success') {
     }, 2800);
 }
 
-// 国际化联动
+// Internationalization (i18n) sync
 function initI18n() {
     currentLocale = getLocale();
     const select = document.getElementById('langSelect');
@@ -195,7 +195,7 @@ function changeLanguage(lang) {
 }
 
 function applyI18n() {
-    // 1. 更新所有 data-i18n 属性的静态 DOM 节点
+    // 1. Update all static DOM elements with data-i18n attribute
     document.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.getAttribute('data-i18n');
         if (key) {
@@ -203,7 +203,7 @@ function applyI18n() {
         }
     });
 
-    // 2. 更新所有 data-i18n-placeholder 属性的输入框
+    // 2. Update all inputs with data-i18n-placeholder attribute
     document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
         const key = el.getAttribute('data-i18n-placeholder');
         if (key) {
@@ -211,7 +211,7 @@ function applyI18n() {
         }
     });
 
-    // 3. 更新 Tab 按钮文案
+    // 3. Update tab button labels
     const btnMembers = document.getElementById('tabBtnMembers');
     if (btnMembers) btnMembers.innerText = t('tabMembers');
 
@@ -221,7 +221,7 @@ function applyI18n() {
     const btnSettings = document.getElementById('tabBtnSettings');
     if (btnSettings) btnSettings.innerText = t('tabSettings');
 
-    // 4. 重新渲染动态列表
+    // 4. Re-render dynamic lists
     renderMembers();
     renderDevices();
     if (!document.getElementById('tabApps').classList.contains('hidden')) {
@@ -230,26 +230,141 @@ function applyI18n() {
     lucide.createIcons();
 }
 
-// 初始化
+// Global lightweight progress bar control
+let progressTimer = null;
+function startProgress() {
+    const bar = document.getElementById('globalProgressBar');
+    if (!bar) return;
+    if (progressTimer) clearInterval(progressTimer);
+    bar.style.opacity = '1';
+    bar.style.width = '25%';
+    let cur = 25;
+    progressTimer = setInterval(() => {
+        if (cur < 85) {
+            cur += Math.random() * 15;
+            bar.style.width = cur + '%';
+        }
+    }, 120);
+}
+
+function finishProgress() {
+    const bar = document.getElementById('globalProgressBar');
+    if (!bar) return;
+    if (progressTimer) clearInterval(progressTimer);
+    bar.style.width = '100%';
+    setTimeout(() => {
+        bar.style.opacity = '0';
+        setTimeout(() => {
+            bar.style.width = '0%';
+        }, 300);
+    }, 200);
+}
+
+// Skeleton placeholder rendering
+function renderMembersSkeleton() {
+    const container = document.getElementById('membersContainer');
+    if (!container) return;
+    container.innerHTML = [1, 2].map(() => `
+        <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-700/80 shadow-sm flex flex-col space-y-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="w-12 h-12 rounded-2xl skeleton"></div>
+                    <div class="space-y-2">
+                        <div class="w-24 h-4 rounded-lg skeleton"></div>
+                        <div class="w-36 h-3 rounded skeleton"></div>
+                    </div>
+                </div>
+                <div class="w-8 h-8 rounded-xl skeleton"></div>
+            </div>
+            <div class="w-full h-7 rounded-xl skeleton"></div>
+            <div class="w-full h-12 rounded-xl skeleton"></div>
+            <div class="grid grid-cols-2 gap-2 pt-1">
+                <div class="h-9 rounded-xl skeleton"></div>
+                <div class="h-9 rounded-xl skeleton"></div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderDevicesSkeleton() {
+    const tbody = document.getElementById('devicesTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = [1, 2, 3, 4].map(() => `
+        <tr class="animate-pulse">
+            <td class="px-4 py-3.5"><div class="w-28 h-4 rounded skeleton"></div></td>
+            <td class="px-4 py-3.5"><div class="w-20 h-3.5 rounded skeleton"></div></td>
+            <td class="px-4 py-3.5"><div class="w-28 h-3.5 rounded skeleton"></div></td>
+            <td class="px-4 py-3.5"><div class="w-20 h-3.5 rounded skeleton"></div></td>
+            <td class="px-4 py-3.5"><div class="w-16 h-3.5 rounded skeleton"></div></td>
+            <td class="px-4 py-3.5"><div class="w-16 h-4 rounded-full skeleton"></div></td>
+            <td class="px-4 py-3.5 text-center"><div class="w-12 h-4 rounded-full skeleton mx-auto"></div></td>
+            <td class="px-4 py-3.5 text-right"><div class="w-16 h-4 rounded skeleton ml-auto"></div></td>
+        </tr>
+    `).join('');
+}
+
+function renderAppManagementSkeleton() {
+    const container = document.getElementById('appsManagementContainer');
+    if (!container) return;
+    container.innerHTML = [1, 2].map(() => `
+        <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
+            <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-700">
+                <div class="w-28 h-5 rounded-lg skeleton"></div>
+                <div class="w-20 h-4 rounded skeleton"></div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                <div class="h-14 rounded-xl skeleton"></div>
+                <div class="h-14 rounded-xl skeleton"></div>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Refresh device list (with dynamic interactive feedback)
+async function refreshDevicesWithFeedback() {
+    const icon = document.getElementById('refreshDevicesIcon');
+    if (icon) icon.classList.add('animate-spin');
+    startProgress();
+    try {
+        await fetchDevices();
+        showToast(t('toastDeviceAssigned') || 'Device list refreshed', 'info');
+    } finally {
+        finishProgress();
+        if (icon) icon.classList.remove('animate-spin');
+    }
+}
+
+// Initialization
 document.addEventListener('DOMContentLoaded', async () => {
     initTheme();
     initI18n();
     lucide.createIcons();
-    await fetchStatus();
 
-    if (appState.status && appState.status.pin_required && !getStoredPin()) {
-        openPinLockModal();
-    } else {
-        await Promise.all([
-            fetchCategories(),
-            fetchMembers(),
-            fetchDevices(),
-            fetchSettings()
-        ]);
+    // Show skeleton placeholders first
+    renderMembersSkeleton();
+    renderDevicesSkeleton();
+    renderAppManagementSkeleton();
+
+    startProgress();
+    try {
+        await fetchStatus();
+
+        if (appState.status && appState.status.pin_required && !getStoredPin()) {
+            openPinLockModal();
+        } else {
+            await Promise.all([
+                fetchCategories(),
+                fetchMembers(),
+                fetchDevices(),
+                fetchSettings()
+            ]);
+        }
+    } finally {
+        finishProgress();
+        lucide.createIcons();
     }
-    lucide.createIcons();
 
-    // 5秒轮询
+    // 5-second polling interval
     setInterval(async () => {
         if (document.getElementById('pinLockModal').classList.contains('hidden')) {
             await Promise.all([fetchStatus(), fetchMembers(), fetchDevices()]);
@@ -318,7 +433,7 @@ function capitalize(s) {
     return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-// API 数据拉取
+// API Data Fetching
 async function fetchStatus() {
     const start = performance.now();
     try {
@@ -350,6 +465,15 @@ async function fetchStatus() {
             if (pinProtectionBadge) {
                 pinProtectionBadge.innerHTML = '<i data-lucide="unlock" class="w-4 h-4 text-slate-400"></i><span>' + t('pinUnprotected') + '</span>';
             }
+        }
+
+        const timeText = document.getElementById('routerTimeText');
+        if (timeText && data.server_time) {
+            const dt = new Date(data.server_time);
+            const hours = String(dt.getHours()).padStart(2, '0');
+            const mins = String(dt.getMinutes()).padStart(2, '0');
+            const tzName = data.timezone_name || 'CST';
+            timeText.innerText = `${hours}:${mins} ${tzName}`;
         }
 
         const badge = document.getElementById('kernelStatusBadge');
@@ -416,7 +540,7 @@ async function fetchSettings() {
     }
 }
 
-// 渲染成员卡片
+// Render member cards
 function renderMembers() {
     const container = document.getElementById('membersContainer');
     const emptyEl = document.getElementById('emptyMembers');
@@ -474,7 +598,7 @@ function renderMembers() {
                     </button>
                 </div>
 
-                <!-- 时间段管控摘要 -->
+                <!-- Schedule restriction summary -->
                 <div class="text-xs bg-slate-50 dark:bg-slate-900/50 p-2.5 rounded-xl border border-slate-100 dark:border-slate-700/60 flex items-center space-x-1.5">
                     <i data-lucide="clock" class="w-3.5 h-3.5 text-slate-400 flex-shrink-0"></i>
                     <div class="truncate text-[11px]">${(() => {
@@ -536,7 +660,7 @@ function renderMembers() {
     }).join('');
 }
 
-// 渲染局域网设备表格
+// Render LAN devices table
 function renderDevices(filterKeyword = '') {
     const tbody = document.getElementById('devicesTableBody');
     if (!appState.devices || appState.devices.length === 0) {
@@ -614,7 +738,7 @@ function filterDevicesTable() {
     renderDevices(input ? input.value.trim() : '');
 }
 
-// 渲染特征库管理 (DPI 应用管理 Tab)
+// Render App Signature Management (DPI Tab)
 function renderAppManagement(keyword = '') {
     const container = document.getElementById('appsManagementContainer');
     if (!container) return;
@@ -682,7 +806,7 @@ function filterAppsGrid() {
     renderAppManagement(input ? input.value.trim() : '');
 }
 
-// 应用与分类创建 Modal
+// App and Category Creation Modal
 function openAppModal(classId = null) {
     const modal = document.getElementById('appModal');
     const select = document.getElementById('formAppCategory');
@@ -714,6 +838,15 @@ async function saveAppForm() {
         class_id: classId
     };
 
+    const saveBtn = document.querySelector('#appModal button[onclick="saveAppForm()"]');
+    const originalContent = saveBtn ? saveBtn.innerHTML : '';
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-1.5"></i><span>${t('btnSaving')}</span>`;
+        lucide.createIcons();
+    }
+    startProgress();
+
     try {
         const res = await authFetch('/api/apps', {
             method: 'POST',
@@ -730,11 +863,19 @@ async function saveAppForm() {
         }
     } catch (e) {
         showToast(t('toastNetworkError'), 'error');
+    } finally {
+        finishProgress();
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = originalContent;
+            lucide.createIcons();
+        }
     }
 }
 
 async function deleteApp(appId) {
     if (!confirm(t('confirmDeleteApp'))) return;
+    startProgress();
     try {
         const res = await authFetch(`/api/apps/${appId}`, { method: 'DELETE' });
         if (res.ok) {
@@ -746,6 +887,8 @@ async function deleteApp(appId) {
         }
     } catch (e) {
         showToast(t('toastNetworkError'), 'error');
+    } finally {
+        finishProgress();
     }
 }
 
@@ -772,6 +915,15 @@ async function saveCategoryForm() {
         icon: icon
     };
 
+    const saveBtn = document.querySelector('#categoryModal button[onclick="saveCategoryForm()"]');
+    const originalContent = saveBtn ? saveBtn.innerHTML : '';
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-1.5"></i><span>${t('btnSaving')}</span>`;
+        lucide.createIcons();
+    }
+    startProgress();
+
     try {
         const res = await authFetch('/api/categories', {
             method: 'POST',
@@ -788,10 +940,17 @@ async function saveCategoryForm() {
         }
     } catch (e) {
         showToast(t('toastNetworkError'), 'error');
+    } finally {
+        finishProgress();
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = originalContent;
+            lucide.createIcons();
+        }
     }
 }
 
-// 加时弹窗控制
+// Bonus time modal control
 function openBonusModal(id, name) {
     document.getElementById('bonusMemberId').value = id;
     document.getElementById('bonusMemberName').innerText = name;
@@ -822,7 +981,7 @@ async function applyBonusTime(minutes) {
     }
 }
 
-// 星期选择快捷操作
+// Schedule day selector helpers
 function selectScheduleDays(preset) {
     const checkboxes = document.querySelectorAll('input[name="scheduleDay"]');
     checkboxes.forEach(cb => {
@@ -837,7 +996,7 @@ function selectScheduleDays(preset) {
     });
 }
 
-// 快捷预设（夜间防沉迷 / 上学日管控）
+// Quick Presets (Night Curfew / School Day Control)
 function applyPresetSchedule(preset) {
     const container = document.getElementById('modalTimeRangeList');
     if (!container) return;
@@ -858,7 +1017,7 @@ function applyPresetSchedule(preset) {
     }
 }
 
-// 动态添加时间段行
+// Dynamically add time range row
 function addTimeRangeRow(startTime = '21:30', endTime = '07:00') {
     const container = document.getElementById('modalTimeRangeList');
     if (!container) return;
@@ -885,7 +1044,7 @@ function removeTimeRangeRow(btn) {
     const row = btn.closest('.time-range-row');
     if (row) {
         row.remove();
-        // 重新编号
+        // Re-index slots
         document.querySelectorAll('#modalTimeRangeList .time-range-row').forEach((r, idx) => {
             const numEl = r.querySelector('.slot-index');
             if (numEl) numEl.innerText = idx + 1;
@@ -893,7 +1052,7 @@ function removeTimeRangeRow(btn) {
     }
 }
 
-// 成员编辑与创建 Modal 逻辑
+// Member Editor and Creation Modal Logic
 function openMemberModal(member = null) {
     const modal = document.getElementById('memberModal');
     const title = document.getElementById('modalTitle');
@@ -908,22 +1067,22 @@ function openMemberModal(member = null) {
         document.getElementById('formMemberAvatar').value = member.avatar || 'boy';
         document.getElementById('formQuotaMinutes').value = member.quota_minutes || '';
 
-        // 回显时间表
+        // Populate schedule
         const schedule = member.schedule || { enabled: true, days: [0, 1, 2, 3, 4, 5, 6], time_ranges: [], action: 'block' };
         document.getElementById('formScheduleEnable').checked = schedule.enabled !== false;
 
-        // 回显动作模式
+        // Populate action mode
         const action = schedule.action || 'block';
         const actionRadio = document.querySelector(`input[name="scheduleAction"][value="${action}"]`);
         if (actionRadio) actionRadio.checked = true;
 
-        // 回显星期
+        // Populate active days
         const daysSet = new Set(schedule.days || [0, 1, 2, 3, 4, 5, 6]);
         document.querySelectorAll('input[name="scheduleDay"]').forEach(cb => {
             cb.checked = daysSet.has(parseInt(cb.value));
         });
 
-        // 回显多个时间段
+        // Populate multiple time ranges
         if (schedule.time_ranges && schedule.time_ranges.length > 0) {
             schedule.time_ranges.forEach(tr => {
                 addTimeRangeRow(tr.start_time || '21:30', tr.end_time || '07:00');
@@ -1048,7 +1207,7 @@ function toggleSelectAllCategory(classID) {
     updateSelectedCount();
 }
 
-// 设备一键断网 / 恢复上网
+// Device Quick Block / Unblock
 async function toggleDeviceLock(mac, currentlyLocked) {
     const action = currentlyLocked ? 'unlock' : 'lock';
     try {
@@ -1065,7 +1224,7 @@ async function toggleDeviceLock(mac, currentlyLocked) {
     }
 }
 
-// 设备分配成员 Modal
+// Device Member Assignment Modal
 function openAssignModal(mac, deviceName, currentMemberId) {
     document.getElementById('assignDeviceMAC').value = mac;
     document.getElementById('assignModalSubtitle').innerText = `${t('colDeviceName')}: ${deviceName} (${mac})`;
@@ -1211,6 +1370,15 @@ async function saveMemberForm() {
         block_adult: true
     };
 
+    const saveBtn = document.querySelector('#memberModal button[onclick="saveMemberForm()"]');
+    const originalContent = saveBtn ? saveBtn.innerHTML : '';
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-1.5"></i><span>${t('btnSaving')}</span>`;
+        lucide.createIcons();
+    }
+    startProgress();
+
     try {
         const res = await authFetch('/api/members', {
             method: 'POST',
@@ -1227,6 +1395,13 @@ async function saveMemberForm() {
         }
     } catch (e) {
         showToast(t('toastNetworkError'), 'error');
+    } finally {
+        finishProgress();
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = originalContent;
+            lucide.createIcons();
+        }
     }
 }
 
@@ -1293,6 +1468,15 @@ async function saveGlobalSettings() {
         isolate_new_devices: document.getElementById('settingIsolateNew').checked,
     };
 
+    const saveBtn = document.querySelector('#tabSettings button[onclick="saveGlobalSettings()"]');
+    const originalContent = saveBtn ? saveBtn.innerHTML : '';
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-1.5"></i><span>${t('btnSaving')}</span>`;
+        lucide.createIcons();
+    }
+    startProgress();
+
     try {
         const res = await authFetch('/api/settings', {
             method: 'POST',
@@ -1310,5 +1494,12 @@ async function saveGlobalSettings() {
         }
     } catch (e) {
         showToast(t('toastFailed'), 'error');
+    } finally {
+        finishProgress();
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = originalContent;
+            lucide.createIcons();
+        }
     }
 }

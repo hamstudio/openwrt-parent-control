@@ -1,6 +1,6 @@
 /**
  * Cloudflare Worker Relay for ParentControl Guard
- * 提供无服务器公网控制端 API 与路由器指令中继调度
+ * Provides serverless public API endpoints and command relay for routers
  */
 
 export interface Env {
@@ -24,7 +24,7 @@ interface RouterState {
   last_seen: number;
 }
 
-// 默认内存后备（在无 KV 绑定的纯本地环境下无缝降级）
+// In-memory fallback (graceful degradation in local development without KV bindings)
 const memoryStore = new Map<string, string>();
 
 async function kvGet(env: Env, key: string): Promise<string | null> {
@@ -69,7 +69,7 @@ export default {
     const path = url.pathname;
     const method = request.method;
 
-    // 处理 CORS 预检请求
+    // Handle CORS preflight requests
     if (method === 'OPTIONS') {
       return jsonResponse({ ok: true });
     }
@@ -78,10 +78,10 @@ export default {
     const queueKey = 'router:default:commands';
 
     // ==========================================
-    // 1. 路由器通信专用接口 (Router Agent API)
+    // 1. Router Agent API (Router sync endpoints)
     // ==========================================
 
-    // 路由器上报全量状态并获取当前待办指令
+    // Router reports full state and retrieves pending command queue
     if (path === '/api/router/sync' && method === 'POST') {
       try {
         const body: any = await request.json();
@@ -95,11 +95,11 @@ export default {
         };
         await kvPut(env, routerKey, JSON.stringify(state));
 
-        // 读取待办指令
+        // Read pending commands
         const queueRaw = await kvGet(env, queueKey);
         const commands: Command[] = queueRaw ? JSON.parse(queueRaw) : [];
 
-        // 已经交给路由器，清空指令队列
+        // Commands dispatched to router; clear queue
         if (commands.length > 0) {
           await kvPut(env, queueKey, JSON.stringify([]));
         }
@@ -114,7 +114,7 @@ export default {
       }
     }
 
-    // 路由器长轮询等待新指令 (Long-Polling)
+    // Router long-polling endpoint for new commands
     if (path === '/api/router/poll' && method === 'GET') {
       const queueRaw = await kvGet(env, queueKey);
       const commands: Command[] = queueRaw ? JSON.parse(queueRaw) : [];
@@ -128,10 +128,10 @@ export default {
     }
 
     // ==========================================
-    // 2. 状态读取与 App 鉴权
+    // 2. State Retrieval & App Authentication
     // ==========================================
 
-    // 获取当前状态
+    // Retrieve current state
     const stateRaw = await kvGet(env, routerKey);
     const state: RouterState = stateRaw
       ? JSON.parse(stateRaw)
@@ -144,11 +144,11 @@ export default {
           last_seen: 0,
         };
 
-    // 检查 PIN 码鉴权
+    // Check PIN authentication
     const configuredPin = state.settings?.pin_code || '';
     const pinRequired = configuredPin !== '';
 
-    // 公开接口：状态查询
+    // Public endpoint: system status
     if (path === '/api/status' && method === 'GET') {
       const isOnline = Date.now() - (state.last_seen || 0) < 60000;
       return jsonResponse({
@@ -160,16 +160,16 @@ export default {
       });
     }
 
-    // PIN 登录验证
+    // PIN login validation
     if (path === '/api/auth/login' && method === 'POST') {
       const body: any = await request.json();
       if (!pinRequired || body.pin === configuredPin) {
         return jsonResponse({ success: true, token: configuredPin });
       }
-      return jsonResponse({ success: false, error: 'PIN 码错误' }, 401);
+      return jsonResponse({ success: false, error: 'Incorrect PIN' }, 401);
     }
 
-    // 校验受保护路由的 PIN 码
+    // Verify PIN for protected endpoints
     if (pinRequired) {
       const clientPin = request.headers.get('X-Pin-Code') || url.searchParams.get('pin') || '';
       if (clientPin !== configuredPin) {
@@ -177,7 +177,7 @@ export default {
       }
     }
 
-    // 入队指令辅助函数
+    // Helper to enqueue a command
     async function enqueueCommand(cmd: Omit<Command, 'id' | 'created_at'>) {
       const queueRaw = await kvGet(env, queueKey);
       const queue: Command[] = queueRaw ? JSON.parse(queueRaw) : [];
@@ -192,10 +192,10 @@ export default {
     }
 
     // ==========================================
-    // 3. App 业务接口 (与路由器原生 API 完全兼容)
+    // 3. App Client Endpoints (Fully compatible with Router native API)
     // ==========================================
 
-    // 成员列表与更新
+    // Member list & update
     if (path === '/api/members' && method === 'GET') {
       return jsonResponse(state.members || []);
     }
@@ -206,7 +206,7 @@ export default {
         member.id = 'm_' + Date.now();
       }
 
-      // 乐观更新云端缓存
+      // Optimistic cache update in cloud KV
       const idx = state.members.findIndex((m) => m.id === member.id);
       if (idx >= 0) {
         state.members[idx] = member;
@@ -215,12 +215,12 @@ export default {
       }
       await kvPut(env, routerKey, JSON.stringify(state));
 
-      // 下发指令到路由器
+      // Dispatch command to router
       await enqueueCommand({ type: 'SET_MEMBER', member_id: member.id, payload: member });
       return jsonResponse(member);
     }
 
-    // 成员动作
+    // Member actions
     if (path.startsWith('/api/members/')) {
       const parts = path.replace('/api/members/', '').split('/');
       const memberId = parts[0];
@@ -264,12 +264,12 @@ export default {
       }
     }
 
-    // 设备列表
+    // Device list
     if (path === '/api/devices' && method === 'GET') {
       return jsonResponse(state.devices || []);
     }
 
-    // 应用分类与特征
+    // App categories and signatures
     if (path === '/api/apps' && method === 'GET') {
       return jsonResponse(state.categories || []);
     }
@@ -280,7 +280,7 @@ export default {
       return jsonResponse({ status: 'queued', app });
     }
 
-    // 全局设置
+    // Global settings
     if (path === '/api/settings' && method === 'GET') {
       return jsonResponse(state.settings || {});
     }
