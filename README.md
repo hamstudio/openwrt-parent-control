@@ -43,6 +43,34 @@ It includes a self-hosted, embedded **Web Dashboard**, native **iOS (SwiftUI)** 
 
 ---
 
+## 🖼️ UI Screenshots & Gallery
+
+<div align="center">
+
+### 📱 Modern Web Dashboard (Desktop)
+
+| 🔒 PIN Security Lock Verification | 📊 Overview Dashboard & Family Cards |
+| :---: | :---: |
+| ![PIN Security Lock](docs/screenshots/01_pin_lock.png) | ![Overview Dashboard](docs/screenshots/02_dashboard_overview.png) |
+
+| 🌐 Discovered LAN Devices & 1-Click Lock | 🎮 Deep L7 DPI App Signatures (8 Categories) |
+| :---: | :---: |
+| ![LAN Devices](docs/screenshots/03_lan_devices.png) | ![DPI Signatures](docs/screenshots/04_dpi_signatures.png) |
+
+| ⏱️ Multi-Schedule Rules & Time Ranges | ⚙️ Global Security, Anti-Bypass & VPS Sync |
+| :---: | :---: |
+| ![Edit Member Rules](docs/screenshots/05_edit_member_rules.png) | ![Global Settings](docs/screenshots/06_global_settings.png) |
+
+### 📱 Mobile-First Responsive View
+
+| 📲 Responsive Layout (390x844 iPhone Viewport) |
+| :---: |
+| <img src="docs/screenshots/07_mobile_view.png" width="380" alt="Mobile Dashboard View"/> |
+
+</div>
+
+---
+
 ## 🏛️ System Architecture
 
 ```mermaid

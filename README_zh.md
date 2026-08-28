@@ -39,9 +39,31 @@
 | ⏱️ **多时段计划与活跃限额** | 支持按星期与多时间段自定义禁网计划（支持跨夜），结合实际流量活跃度的 Token Bucket 每日限额、一键断网 (Instant Lock) 与奖励临时加时 (+15m/+30m/+1h)。 |
 | 🛡️ **安全搜索与防绕过体系** | 强制锁定 Google/Bing/Baidu/YouTube 青少年 SafeSearch，53 端口本地劫持，封锁外部公共 DoH/DoT (853/443端口)，防范随机 MAC 绕过。 |
 | ☁️ **Serverless 云端中继** | 路由器主动发起出站 HTTPS 长轮询至 **Cloudflare Workers & KV**，无需公网 IP、无需 DDNS、无需端口映射即可实现 4G/5G 远程管控。 |
-| ⚙️ **OpenWrt 原生适配** | 深度集成 LuCI 控制菜单 (`luci-app-parentcontrol`)、`procd` 系统守护服务，提供多架构自动化编译与 IPK 打包脚本。 |
-
 ---
+
+## 🖼️ 界面截图预览
+
+<div align="center">
+
+### 📱 现代化 Web 控制台大屏
+
+| 🔒 安全访问密码锁 (PIN 保护) | 📊 主控制台与成员管理概览 |
+| :---: | :---: |
+| ![PIN 安全锁屏](docs/screenshots/01_pin_lock.png) | ![主控制台概览](docs/screenshots/02_dashboard_overview.png) |
+
+| 🌐 局域网设备探测与一键断网 | 🎮 深度 L7 DPI 应用特征库 (8大分类) |
+| :---: | :---: |
+| ![局域网设备管理](docs/screenshots/03_lan_devices.png) | ![DPI 应用特征库](docs/screenshots/04_dpi_signatures.png) |
+
+| ⏱️ 成员多时间段计划与特征封禁配置 | ⚙️ 全局安全、防绕过与国内 VPS / CF 同步 |
+| :---: | :---: |
+| ![成员规则配置弹窗](docs/screenshots/05_edit_member_rules.png) | ![全局安全配置](docs/screenshots/06_global_settings.png) |
+
+| 📱 移动端自适应视图 (手机竖屏) |
+| :---: |
+| <img src="docs/screenshots/07_mobile_view.png" width="380" alt="移动端视图"/> |
+
+</div>
 
 ## 🏛️ 系统架构
 
