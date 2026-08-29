@@ -123,6 +123,12 @@ func (pe *PolicyEngine) checkDailyReset(now time.Time) {
 	}
 }
 
+const (
+	// MinActiveRateBytes is the threshold (15 KB/s) to distinguish real user interactive traffic
+	// from background heartbeats, push notifications (APNs/FCM), NTP, and IoT keepalives.
+	MinActiveRateBytes = 15360
+)
+
 // evaluateActiveUsage checks if managed devices have network traffic and increments active minutes
 func (pe *PolicyEngine) evaluateActiveUsage(now time.Time) {
 	pe.mu.Lock()
@@ -131,7 +137,7 @@ func (pe *PolicyEngine) evaluateActiveUsage(now time.Time) {
 	// 1. Scan and record per-device activity into stats engine
 	devices := pe.tracker.ScanDevices()
 	for _, dev := range devices {
-		if dev.Online && (dev.RxRate > 2048 || dev.TxRate > 2048) {
+		if dev.Online && (dev.RxRate > MinActiveRateBytes || dev.TxRate > MinActiveRateBytes) {
 			if pe.stats != nil {
 				pe.stats.RecordMinuteActivity(dev.MAC, dev.IP, dev.Hostname, dev.MemberID, dev.RxRate*60, now)
 			}
@@ -149,11 +155,11 @@ func (pe *PolicyEngine) evaluateActiveUsage(now time.Time) {
 			continue
 		}
 
-		// Check if any bound device has active traffic (downstream + upstream rate > 2KB/s)
+		// Check if any bound device has active human interactive traffic (>15KB/s)
 		isActive := false
 		for _, mac := range member.DeviceMACs {
 			dev := pe.tracker.GetDevice(mac)
-			if dev != nil && dev.Online && (dev.RxRate > 2048 || dev.TxRate > 2048) {
+			if dev != nil && dev.Online && (dev.RxRate > MinActiveRateBytes || dev.TxRate > MinActiveRateBytes) {
 				isActive = true
 				break
 			}

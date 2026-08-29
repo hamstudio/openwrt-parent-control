@@ -286,7 +286,7 @@ func (s *Server) handleDeviceActions(w http.ResponseWriter, r *http.Request) {
 		s.config.Data.Settings = s.engine.GetSettings()
 		s.config.Data.Members = s.engine.GetMembers()
 		_ = s.config.Save()
-		s.engine.EvaluateAndApply(time.Now())
+		s.engine.EvaluateAndApply(tz.Now())
 		s.jsonResponse(w, http.StatusOK, map[string]string{"status": "locked", "mac": mac})
 		return
 	}
@@ -297,7 +297,7 @@ func (s *Server) handleDeviceActions(w http.ResponseWriter, r *http.Request) {
 		s.config.Data.Settings = s.engine.GetSettings()
 		s.config.Data.Members = s.engine.GetMembers()
 		_ = s.config.Save()
-		s.engine.EvaluateAndApply(time.Now())
+		s.engine.EvaluateAndApply(tz.Now())
 		s.jsonResponse(w, http.StatusOK, map[string]string{"status": "unlocked", "mac": mac})
 		return
 	}
@@ -312,7 +312,7 @@ func (s *Server) handleDeviceActions(w http.ResponseWriter, r *http.Request) {
 		s.engine.AssignDeviceToMember(mac, req.MemberID)
 		s.config.Data.Members = s.engine.GetMembers()
 		_ = s.config.Save()
-		s.engine.EvaluateAndApply(time.Now())
+		s.engine.EvaluateAndApply(tz.Now())
 		s.jsonResponse(w, http.StatusOK, map[string]interface{}{
 			"status":    "assigned",
 			"mac":       mac,
@@ -408,7 +408,7 @@ func (s *Server) handleMembers(w http.ResponseWriter, r *http.Request) {
 		_ = s.config.Save()
 
 		// Trigger immediate rule evaluation
-		s.engine.EvaluateAndApply(time.Now())
+		s.engine.EvaluateAndApply(tz.Now())
 
 		s.jsonResponse(w, http.StatusOK, m)
 	default:
@@ -431,7 +431,7 @@ func (s *Server) handleMemberActions(w http.ResponseWriter, r *http.Request) {
 		s.engine.DeleteMember(memberID)
 		s.config.Data.Members = s.engine.GetMembers()
 		_ = s.config.Save()
-		s.engine.EvaluateAndApply(time.Now())
+		s.engine.EvaluateAndApply(tz.Now())
 		s.jsonResponse(w, http.StatusOK, map[string]string{"result": "deleted"})
 		return
 	}
@@ -445,7 +445,7 @@ func (s *Server) handleMemberActions(w http.ResponseWriter, r *http.Request) {
 		s.config.Data.Members = s.engine.GetMembers()
 		s.config.Data.Settings = s.engine.GetSettings()
 		_ = s.config.Save()
-		s.engine.EvaluateAndApply(time.Now())
+		s.engine.EvaluateAndApply(tz.Now())
 		s.jsonResponse(w, http.StatusOK, map[string]string{"status": "locked"})
 		return
 	}
@@ -459,7 +459,7 @@ func (s *Server) handleMemberActions(w http.ResponseWriter, r *http.Request) {
 		s.config.Data.Members = s.engine.GetMembers()
 		s.config.Data.Settings = s.engine.GetSettings()
 		_ = s.config.Save()
-		s.engine.EvaluateAndApply(time.Now())
+		s.engine.EvaluateAndApply(tz.Now())
 		s.jsonResponse(w, http.StatusOK, map[string]string{"status": "unlocked"})
 		return
 	}
@@ -477,7 +477,7 @@ func (s *Server) handleMemberActions(w http.ResponseWriter, r *http.Request) {
 		s.config.Data.Members = s.engine.GetMembers()
 		s.config.Data.Settings = s.engine.GetSettings()
 		_ = s.config.Save()
-		s.engine.EvaluateAndApply(time.Now())
+		s.engine.EvaluateAndApply(tz.Now())
 		s.jsonResponse(w, http.StatusOK, map[string]string{"status": "bonus_applied", "minutes": strconv.Itoa(minutes)})
 		return
 	}
@@ -505,7 +505,7 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		_ = s.dnsMgr.ApplyConfig(req.EnforceSafeSearch, true, req.CustomBlacklist, req.CustomWhitelist)
 
 		// Trigger immediate rule evaluation
-		s.engine.EvaluateAndApply(time.Now())
+		s.engine.EvaluateAndApply(tz.Now())
 
 		s.jsonResponse(w, http.StatusOK, req)
 	default:

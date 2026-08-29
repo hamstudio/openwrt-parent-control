@@ -234,8 +234,9 @@ func (st *StatsTracker) RecordMinuteActivity(mac, ip, hostname, memberID string,
 		devStat.MemberID = memberID
 	}
 
+	localNow := now.In(tz.GetLocation())
 	devStat.UsedMinutes++
-	hour := now.Hour()
+	hour := localNow.Hour()
 	if hour >= 0 && hour < 24 {
 		devStat.HourlyMinutes[hour]++
 	}

@@ -8,6 +8,7 @@ import (
 
 	"parentcontrol/internal/dpi"
 	"parentcontrol/internal/models"
+	"parentcontrol/internal/tz"
 )
 
 func TestStatsTracker_RecordAndOverview(t *testing.T) {
@@ -24,7 +25,7 @@ func TestStatsTracker_RecordAndOverview(t *testing.T) {
 	mac1 := "00:11:22:33:44:55"
 	mac2 := "AA:BB:CC:DD:EE:FF"
 
-	now := time.Date(2026, 8, 28, 14, 30, 0, 0, time.Local)
+	now := tz.Now()
 
 	// Record minute activity
 	tracker.RecordMinuteActivity(mac1, "192.168.1.100", "iPhone-Child", "m_1", 1024*1024, now)
@@ -63,8 +64,8 @@ func TestStatsTracker_RecordAndOverview(t *testing.T) {
 
 	// Verify detail
 	detail := tracker.GetDeviceStatsDetail(mac1, 7, devices[0], &members[0])
-	if detail.HourlyActivity[14] != 2 {
-		t.Errorf("Expected 2 minutes at hour 14, got %d", detail.HourlyActivity[14])
+	if detail.HourlyActivity[now.Hour()] != 2 {
+		t.Errorf("Expected 2 minutes at hour %d, got %d", now.Hour(), detail.HourlyActivity[now.Hour()])
 	}
 	if len(detail.TopApps) != 2 {
 		t.Errorf("Expected 2 top apps, got %d", len(detail.TopApps))
