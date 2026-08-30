@@ -69,14 +69,16 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
+        with:
+          build-root-directory: client/Android
 
       - name: Grant execute permission for gradlew
         run: chmod +x client/Android/gradlew
 
       - name: Build Android APK
+        working-directory: client/Android
         run: |
-          cd client/Android
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug --no-daemon --stacktrace
           mkdir -p ../../dist-apk
           cp app/build/outputs/apk/debug/app-debug.apk ../../dist-apk/ParentControl-Guard-${{ github.ref_name }}.apk
 
