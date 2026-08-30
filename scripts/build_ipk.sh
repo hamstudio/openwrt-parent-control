@@ -106,8 +106,10 @@ export COPYFILE_DISABLE=1
 (cd "${DATA_DIR}" && tar --format=ustar -czf "${WORK_DIR}/data.tar.gz" .)
 (cd "${CONTROL_DIR}" && tar --format=ustar -czf "${WORK_DIR}/control.tar.gz" .)
 
+ROOT_DIR="$(pwd)"
 IPK_FILE="${OUTPUT_DIR}/${PKG_NAME}_${VERSION}_${ARCH}.ipk"
-(cd "${WORK_DIR}" && tar --format=ustar -czf "${OLDPWD}/${IPK_FILE}" ./debian-binary ./control.tar.gz ./data.tar.gz)
+IPK_ABS_PATH="${ROOT_DIR}/${IPK_FILE}"
+(cd "${WORK_DIR}" && tar --format=ustar -czf "${IPK_ABS_PATH}" ./debian-binary ./control.tar.gz ./data.tar.gz)
 
 # Cleanup temporary directory
 rm -rf "${WORK_DIR}"
