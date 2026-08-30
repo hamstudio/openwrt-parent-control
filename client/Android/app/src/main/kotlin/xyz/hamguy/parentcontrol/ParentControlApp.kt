@@ -10,7 +10,7 @@ class ParentControlApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
-        repository = ParentControlRepository()
+        repository = ParentControlRepository(this)
     }
 
     companion object {

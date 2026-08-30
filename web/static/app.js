@@ -222,6 +222,12 @@ function applyI18n() {
     const btnDevices = document.getElementById('tabBtnDevices');
     if (btnDevices) btnDevices.innerText = t('tabDevices');
 
+    const btnStatsSpan = document.querySelector('#tabBtnStats span[data-i18n]');
+    if (btnStatsSpan) btnStatsSpan.innerText = t('tabStats');
+
+    const btnAppsSpan = document.querySelector('#tabBtnApps span[data-i18n]');
+    if (btnAppsSpan) btnAppsSpan.innerText = t('tabApps');
+
     const btnSettings = document.getElementById('tabBtnSettings');
     if (btnSettings) btnSettings.innerText = t('tabSettings');
 
@@ -1872,8 +1878,8 @@ function renderStatsTrendChart(history) {
                 <div class="absolute bottom-full mb-1.5 hidden group-hover:flex flex-col items-center z-20 pointer-events-none">
                     <div class="bg-slate-900 text-white text-[10px] rounded-lg px-2.5 py-1.5 shadow-lg whitespace-nowrap text-center">
                         <div class="font-bold">${rec.date}</div>
-                        <div>时长: <span class="text-emerald-400 font-semibold">${formatDuration(rec.used_minutes)}</span></div>
-                        ${(rec.rx_bytes + rec.tx_bytes) > 0 ? `<div>流量: <span class="text-blue-400">${formatTrafficBytes(rec.rx_bytes + rec.tx_bytes)}</span></div>` : ''}
+                        <div>${t('totalScreenTime') || 'Duration'}: <span class="text-emerald-400 font-semibold">${formatDuration(rec.used_minutes)}</span></div>
+                        ${(rec.rx_bytes + rec.tx_bytes) > 0 ? `<div>${t('totalTraffic') || 'Traffic'}: <span class="text-blue-400">${formatTrafficBytes(rec.rx_bytes + rec.tx_bytes)}</span></div>` : ''}
                     </div>
                     <div class="w-1.5 h-1.5 bg-slate-900 rotate-45 -mt-0.5"></div>
                 </div>
@@ -1905,7 +1911,7 @@ function renderStatsTopApps(topApps) {
 
     tbody.innerHTML = topApps.slice(0, 10).map(app => {
         const theme = getCategoryColor(app.class_name);
-        const zhCat = app.class_zh || app.class_name || '其他';
+        const zhCat = tDpiCategory(app.class_zh || app.class_name || 'other');
         const appName = tDpiApp(app.app_name || `App-${app.app_id}`);
 
         return `

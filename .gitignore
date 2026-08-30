@@ -17,6 +17,15 @@ dist/
 .DS_Store
 .vscode/
 .idea/
+*.xcuserstate
+*.xcuserdatad
+
+# Android & Gradle
+.gradle/
+build/
+**/build/
+*.apk
+*.aab
 
 # Temporary files
 /tmp/

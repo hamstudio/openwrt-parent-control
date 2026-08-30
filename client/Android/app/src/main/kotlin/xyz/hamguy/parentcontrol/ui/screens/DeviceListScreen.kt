@@ -25,7 +25,9 @@ import xyz.hamguy.parentcontrol.R
 import xyz.hamguy.parentcontrol.model.Device
 import xyz.hamguy.parentcontrol.model.Member
 import xyz.hamguy.parentcontrol.repository.ParentControlRepository
+import xyz.hamguy.parentcontrol.ui.theme.DangerRed
 import xyz.hamguy.parentcontrol.ui.theme.SuccessGreen
+import xyz.hamguy.parentcontrol.ui.theme.WarningOrange
 
 enum class AndroidDeviceFilter {
     ALL, ONLINE, LOCKED, UNASSIGNED
@@ -39,17 +41,19 @@ fun DeviceListScreen(
 ) {
     val devices by repository.devices.collectAsState()
     val members by repository.members.collectAsState()
+    val needsPinAuth by repository.needsPinAuth.collectAsState()
     val isRefreshing by repository.isLoading.collectAsState()
     val coroutineScope = rememberCoroutineScope()
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf(AndroidDeviceFilter.ALL) }
     var assigningDevice by remember { mutableStateOf<Device?>(null) }
+    var pinInput by remember { mutableStateOf("") }
 
     val filteredDevices = remember(devices, members, searchQuery, selectedFilter) {
         devices.filter { d ->
             val matchesSearch = searchQuery.isEmpty() ||
-                    d.hostname.contains(searchQuery, ignoreCase = true) ||
+                    d.displayName.contains(searchQuery, ignoreCase = true) ||
                     d.ip.contains(searchQuery) ||
                     d.mac.contains(searchQuery, ignoreCase = true) ||
                     d.vendor.contains(searchQuery, ignoreCase = true)
@@ -77,7 +81,7 @@ fun DeviceListScreen(
                     Column {
                         Text(stringResource(R.string.devices_title), fontWeight = FontWeight.Bold)
                         Text(
-                            text = "$onlineCount / ${devices.size} Online",
+                            text = "$onlineCount / ${devices.size} ${stringResource(R.string.filter_online)}",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -110,7 +114,7 @@ fun DeviceListScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
-                placeholder = { Text("Search hostname, IP, MAC, vendor...") },
+                placeholder = { Text(stringResource(R.string.search_device_placeholder)) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
@@ -132,16 +136,80 @@ fun DeviceListScreen(
             ) {
                 AndroidDeviceFilter.values().forEach { filter ->
                     val title = when (filter) {
-                        AndroidDeviceFilter.ALL -> "All (${devices.size})"
-                        AndroidDeviceFilter.ONLINE -> "Online ($onlineCount)"
-                        AndroidDeviceFilter.LOCKED -> "Locked (${devices.count { it.isLocked }})"
-                        AndroidDeviceFilter.UNASSIGNED -> "Unassigned"
+                        AndroidDeviceFilter.ALL -> "${stringResource(R.string.filter_all)} (${devices.size})"
+                        AndroidDeviceFilter.ONLINE -> "${stringResource(R.string.filter_online)} ($onlineCount)"
+                        AndroidDeviceFilter.LOCKED -> "${stringResource(R.string.filter_locked)} (${devices.count { it.isLocked }})"
+                        AndroidDeviceFilter.UNASSIGNED -> stringResource(R.string.filter_unassigned)
                     }
                     Tab(
                         selected = selectedFilter == filter,
                         onClick = { selectedFilter = filter },
                         text = { Text(title, fontWeight = if (selectedFilter == filter) FontWeight.Bold else FontWeight.Normal) }
                     )
+                }
+            }
+
+            // PIN Auth Card in Devices list if needed
+            if (needsPinAuth) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Shield, contentDescription = null, tint = WarningOrange)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                stringResource(R.string.pin_required_title),
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                        }
+                        Text(
+                            text = stringResource(R.string.pin_required_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 6.dp)
+                        )
+                        var pinVisible by remember { mutableStateOf(false) }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = pinInput,
+                                onValueChange = { pinInput = it },
+                                placeholder = { Text(stringResource(R.string.pin_placeholder)) },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                shape = RoundedCornerShape(10.dp),
+                                visualTransformation = if (pinVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword),
+                                trailingIcon = {
+                                    IconButton(onClick = { pinVisible = !pinVisible }) {
+                                        Icon(
+                                            imageVector = if (pinVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                            contentDescription = null
+                                        )
+                                    }
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Button(
+                                onClick = {
+                                    repository.pinCode = pinInput
+                                    coroutineScope.launch { repository.refreshAll() }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text(stringResource(R.string.btn_verify), fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
                 }
             }
 
@@ -160,11 +228,20 @@ fun DeviceListScreen(
                                 .padding(vertical = 40.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = "No matching devices found",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    imageVector = Icons.Default.Devices,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(48.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Text(
+                                    text = stringResource(R.string.no_devices),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 } else {
@@ -209,8 +286,8 @@ fun DeviceListScreen(
 fun DeviceItemCard(
     device: Device,
     assignedMember: Member?,
-    onAssignClick: () -> VoidHandler,
-    onToggleLock: () -> VoidHandler
+    onAssignClick: () -> Unit,
+    onToggleLock: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -222,7 +299,7 @@ fun DeviceItemCard(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Status & Icon
+                // Status & Vendor Icon Box
                 Box(
                     modifier = Modifier
                         .size(44.dp)
@@ -257,17 +334,18 @@ fun DeviceItemCard(
                         Text(
                             text = device.displayName,
                             style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
                         )
                         if (device.isLocked) {
                             Spacer(modifier = Modifier.width(6.dp))
                             Surface(
-                                color = MaterialTheme.colorScheme.error.copy(alpha = 0.15f),
+                                color = DangerRed.copy(alpha = 0.15f),
                                 shape = RoundedCornerShape(4.dp)
                             ) {
                                 Text(
-                                    text = "Locked",
-                                    color = MaterialTheme.colorScheme.error,
+                                    text = stringResource(R.string.locked),
+                                    color = DangerRed,
                                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                                     style = MaterialTheme.typography.labelSmall,
                                     fontSize = 10.sp,
@@ -277,14 +355,18 @@ fun DeviceItemCard(
                         }
                     }
 
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "IP: ${device.ip}  •  MAC: ${device.mac}",
-                        style = MaterialTheme.typography.bodySmall,
+                        text = "IP: ${device.ip} · MAC: ${device.mac}",
+                        style = MaterialTheme.typography.labelSmall,
                         fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    Row(modifier = Modifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 2.dp)
+                    ) {
                         Text(
                             text = device.vendor.ifEmpty { "Generic" },
                             style = MaterialTheme.typography.labelSmall,
@@ -292,31 +374,35 @@ fun DeviceItemCard(
                         )
                         if (device.online) {
                             Text(
-                                text = "  •  Rate: ${formatSpeed(device.rxRate)}",
+                                text = " · ${stringResource(R.string.realtime_speed)}: ${formatSpeed(device.rxRate)}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = SuccessGreen,
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.Medium
                             )
                         }
                     }
                 }
             }
 
-            Divider(modifier = Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.surface)
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 10.dp),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+            )
 
-            // Actions & Assignment
+            // Action & Assignment Bar
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Member badge
+                // Member Assignment Badge
                 if (assignedMember != null) {
                     Surface(
                         color = SuccessGreen.copy(alpha = 0.12f),
                         shape = RoundedCornerShape(6.dp)
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
@@ -332,7 +418,7 @@ fun DeviceItemCard(
                             Text(
                                 text = assignedMember.name,
                                 color = SuccessGreen,
-                                style = MaterialTheme.typography.labelMedium,
+                                style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -343,41 +429,37 @@ fun DeviceItemCard(
                         shape = RoundedCornerShape(6.dp)
                     ) {
                         Text(
-                            text = "Unassigned",
+                            text = stringResource(R.string.unassigned),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                             style = MaterialTheme.typography.labelSmall
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.weight(1f))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = onAssignClick) {
+                        Text(stringResource(R.string.btn_assign), color = SuccessGreen, fontWeight = FontWeight.Bold)
+                    }
 
-                // Assign button
-                TextButton(onClick = { onAssignClick() }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
-                    Text("Assign", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = SuccessGreen)
-                }
+                    Text(" | ", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
 
-                Text(" | ", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f), fontSize = 12.sp)
-
-                // Lock toggle button
-                TextButton(
-                    onClick = { onToggleLock() },
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                ) {
-                    Icon(
-                        imageVector = if (device.isLocked) Icons.Default.LockOpen else Icons.Default.Lock,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp),
-                        tint = if (device.isLocked) SuccessGreen else MaterialTheme.colorScheme.error
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = if (device.isLocked) "Unlock" else "Lock",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = if (device.isLocked) SuccessGreen else MaterialTheme.colorScheme.error
-                    )
+                    TextButton(onClick = onToggleLock) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = if (device.isLocked) Icons.Default.LockOpen else Icons.Default.Lock,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = if (device.isLocked) SuccessGreen else DangerRed
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = if (device.isLocked) stringResource(R.string.btn_unlock) else stringResource(R.string.btn_lock),
+                                color = if (device.isLocked) SuccessGreen else DangerRed,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -388,14 +470,14 @@ fun DeviceItemCard(
 fun DeviceAssignDialog(
     device: Device,
     members: List<Member>,
-    onDismiss: () -> VoidHandler,
-    onConfirm: (String?) -> VoidHandler
+    onDismiss: () -> Unit,
+    onConfirm: (String?) -> Unit
 ) {
     var selectedId by remember { mutableStateOf(device.memberId ?: "") }
 
     AlertDialog(
-        onDismissRequest = { onDismiss() },
-        title = { Text("Assign Device") },
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.assign_modal_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
@@ -403,51 +485,77 @@ fun DeviceAssignDialog(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Divider(modifier = Modifier.padding(vertical = 4.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
-                // Unassigned Option
+                // Unassigned option
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(8.dp))
+                        .background(if (selectedId.isEmpty()) SuccessGreen.copy(alpha = 0.15f) else Color.Transparent)
                         .clickable { selectedId = "" }
                         .padding(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    RadioButton(selected = selectedId.isEmpty(), onClick = { selectedId = "" })
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("🚫 Unbind (Set as Unassigned)", style = MaterialTheme.typography.bodyMedium)
+                    Text(text = "🚫", fontSize = 18.sp)
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(stringResource(R.string.unbind_device), fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.unassigned), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (selectedId.isEmpty()) {
+                        Icon(Icons.Default.Check, contentDescription = null, tint = SuccessGreen)
+                    }
                 }
 
                 // Member options
-                members.forEach { m ->
+                members.forEach { member ->
+                    val isSelected = selectedId == member.id
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(8.dp))
-                            .clickable { selectedId = m.id }
+                            .background(if (isSelected) SuccessGreen.copy(alpha = 0.15f) else Color.Transparent)
+                            .clickable { selectedId = member.id }
                             .padding(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        RadioButton(selected = selectedId == m.id, onClick = { selectedId = m.id })
-                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "${m.name} (${m.deviceMacs.size} devices)",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold
+                            text = when (member.avatar) {
+                                "girl" -> "👧"
+                                "student" -> "🧑‍🎓"
+                                "child" -> "👶"
+                                else -> "👦"
+                            },
+                            fontSize = 18.sp
                         )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = member.name, fontWeight = FontWeight.Bold)
+                            Text(
+                                text = "${member.deviceMacs.size} ${stringResource(R.string.stat_devices)} · ${stringResource(R.string.today_usage)}: ${member.usedMinutes} ${stringResource(R.string.minutes)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (isSelected) {
+                            Icon(Icons.Default.Check, contentDescription = null, tint = SuccessGreen)
+                        }
                     }
                 }
             }
         },
         confirmButton = {
-            Button(onClick = { onConfirm(selectedId.ifEmpty { null }) }) {
-                Text("Save")
+            Button(
+                onClick = { onConfirm(selectedId.ifEmpty { null }) },
+                colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen)
+            ) {
+                Text(stringResource(R.string.btn_save))
             }
         },
         dismissButton = {
-            TextButton(onClick = { onDismiss() }) {
-                Text("Cancel")
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
             }
         }
     )
@@ -460,5 +568,3 @@ private fun formatSpeed(bytesPerSec: Long): String {
         String.format("%.0f KB/s", bytesPerSec / 1024.0)
     }
 }
-
-typealias VoidHandler = () -> Unit

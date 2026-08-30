@@ -36,9 +36,10 @@ It includes a self-hosted, embedded **Web Dashboard**, native **iOS (SwiftUI)** 
 | 📱 **Web Dashboard** | Embedded single-binary Web UI, zero runtime dependencies, dark/light theme, PIN lock protection, multi-language support (8 locales). |
 | 🍎 **Native Mobile Apps** | Pure **SwiftUI** for iOS and Kotlin Compose for Android, sharing a cross-platform pure **Swift** core library (`ParentControlCore`) via C-FFI / JNI. |
 | 🎮 **Kernel L7 DPI Engine** | Accurate packet-level signature classification (`kmod-oaf`) across hundreds of apps (Steam, TikTok, YouTube, Discord, Honor of Kings, Genshin Impact). |
-| ⏱️ **Schedules & Quotas** | Multi-interval time windows with overnight span support, active-traffic token bucket daily limits, instant Internet lock, and bonus time rewards (+15m, +30m, +1h). |
-| 🛡️ **Anti-Bypass System** | Enforced **SafeSearch** on Google/Bing/Baidu/YouTube, forced port 53 DNS redirection, blocked public DoH/DoT servers (port 853 / 443), and MAC randomization quarantine. |
-| ☁️ **Serverless Cloud Relay** | Outbound-only HTTPS long-poll to **Cloudflare Workers & KV** for out-of-home remote mobile management (no public IP, DDNS, or port forwarding required). |
+| ⏱️ **Schedules & Quotas** | Multi-interval time windows with overnight span support, human-active traffic token bucket daily limits, instant Internet lock, and bonus time rewards (+15m, +30m, +1h). |
+| 🛡️ **Multi-Layer Defense** | Top-priority `mangle` PREROUTING drop (prevents OpenClash / Passwall proxy bypass), SafeSearch on Google/Bing/Baidu, forced port 53 DNS redirection, blocked DoH/DoT (853/443), and MAC randomization quarantine. |
+| 📊 **Usage Analytics & Profile** | 24-hour activity distribution histograms, DPI category breakdown, and 30-day historical usage trends with background noise filtering. |
+| ☁️ **Dual Cloud Relay Modes** | Serverless **Cloudflare Workers & KV** relay + standalone **Go Relay Server** (In-Memory MQ + WebSocket) for private VPS deployments. |
 | ⚙️ **OpenWrt Integration** | Native `luci-app-parentcontrol` LuCI administration menu, `procd` init service, and automated IPK packaging. |
 
 ---
@@ -86,20 +87,23 @@ flowchart TB
         APIEngine[RESTful API Engine<br/>Auth & Rate Limiter]
         DeviceMonitor[DHCP & ARP Sniffer<br/>Traffic Rate Monitor]
         QuotaEngine[Active Quota Tracker<br/>Token Bucket Scheduler]
+        StatsTracker[Usage Stats & Analytics<br/>24h Bucket & History Archive]
         PolicyDispatcher[Policy Dispatcher & Netfilter Manager]
-        CloudSyncer[Outbound Cloud Syncer<br/>Long-Poll Relay]
+        CloudSyncer[Outbound Cloud Syncer<br/>CF Long-Poll & Go WS Relay]
     end
 
     subgraph KernelAndOS [Linux Kernel & Network Subsystem]
+        NetfilterMangle[iptables PARENT_CONTROL_MANGLE_PRE<br/>Top Priority Anti-Proxy Bypass]
+        NetfilterInput[iptables PARENT_CONTROL_INPUT<br/>Block Local Router Access]
         NetfilterFWD[iptables PARENT_CONTROL_FWD<br/>Lock & Schedule Filter]
         NetfilterNAT[iptables PARENT_CONTROL_NAT_PRE<br/>Port 53 Redirection]
         DPIEngine[kmod-oaf Kernel Module<br/>/dev/appfilter Character Device]
         DNSResolver[dnsmasq-full<br/>SafeSearch Rewrites]
     end
 
-    subgraph CloudLayer [Optional Remote Relay]
-        CFWorker[⚡ Cloudflare Worker<br/>Serverless Relay]
-        CFKV[(Cloudflare KV<br/>State & Command Queue)]
+    subgraph CloudLayer [Dual Cloud Relay Modes]
+        CFWorker[⚡ Cloudflare Worker<br/>Serverless Relay + KV]
+        GoRelay[🚀 Standalone Go Relay<br/>Private VPS + WebSocket MQ]
     end
 
     WebUI <--> APIEngine
@@ -109,16 +113,21 @@ flowchart TB
 
     APIEngine <--> PolicyDispatcher
     DeviceMonitor --> QuotaEngine
+    QuotaEngine --> StatsTracker
     QuotaEngine <--> PolicyDispatcher
+    PolicyDispatcher --> NetfilterMangle
+    PolicyDispatcher --> NetfilterInput
     PolicyDispatcher --> NetfilterFWD
     PolicyDispatcher --> NetfilterNAT
     PolicyDispatcher --> DPIEngine
     PolicyDispatcher --> DNSResolver
 
     CloudSyncer <--> CFWorker
-    CFWorker <--> CFKV
+    CloudSyncer <--> GoRelay
     iOSApp -. 4G/5G Remote .-> CFWorker
+    iOSApp -. 4G/5G Remote .-> GoRelay
     AndroidApp -. 4G/5G Remote .-> CFWorker
+    AndroidApp -. 4G/5G Remote .-> GoRelay
 ```
 
 ---

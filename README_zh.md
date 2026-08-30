@@ -36,9 +36,11 @@
 | 📱 **独立 Web 控制台** | 单二进制内嵌，零外部运行时依赖，支持手机端/PC端自适应、明暗主题切换、4位数字 PIN 密码锁与 8 种国际化语言。 |
 | 🍎 **原生跨平台移动端** | iOS 纯 **SwiftUI** 构建与 Android Kotlin Compose 原生界面，通过 C-FFI / JNI 共享纯 **Swift** 跨平台业务与网络核心 (`ParentControlCore`)。 |
 | 🎮 **内核级 L7 DPI 引擎** | 基于 `kmod-oaf` 内核模块与协议指纹库，精准识别并封禁数百款主流 App（王者荣耀、和平精英、原神、Steam、抖音、快手、TikTok、YouTube、B站等）。 |
-| ⏱️ **多时段计划与活跃限额** | 支持按星期与多时间段自定义禁网计划（支持跨夜），结合实际流量活跃度的 Token Bucket 每日限额、一键断网 (Instant Lock) 与奖励临时加时 (+15m/+30m/+1h)。 |
-| 🛡️ **安全搜索与防绕过体系** | 强制锁定 Google/Bing/Baidu/YouTube 青少年 SafeSearch，53 端口本地劫持，封锁外部公共 DoH/DoT (853/443端口)，防范随机 MAC 绕过。 |
-| ☁️ **Serverless 云端中继** | 路由器主动发起出站 HTTPS 长轮询至 **Cloudflare Workers & KV**，无需公网 IP、无需 DDNS、无需端口映射即可实现 4G/5G 远程管控。 |
+| ⏱️ **多时段计划与活跃限额** | 支持按星期与多时间段自定义禁网计划（支持跨夜），结合实际人机交互流量的 Token Bucket 每日限额、一键断网 (Instant Lock) 与奖励临时加时 (+15m/+30m/+1h)。 |
+| 🛡️ **立体多层防绕过体系** | 在 `mangle` 表 `PREROUTING` 第一优先级截杀，无惧 OpenClash / Passwall 代理旁路；强制锁定 Google/Bing/Baidu 青少年 SafeSearch，封锁外部公共 DoH/DoT (853/443端口)，防范随机 MAC 绕过。 |
+| 📊 **时长统计与行为画像** | 精准记录每台设备的 24 小时活跃时长分布、DPI 分类时长占比与 30 天历史趋势，内置底噪心跳过滤算法，真实还原人机使用时长。 |
+| ☁️ **双模式云端远程中继** | 支持 **Cloudflare Workers & KV** 无服务器中继，以及基于 **Go + In-Memory MQ + WebSocket** 的自建国内 VPS 中继服务器，4G/5G 外网毫秒级远程管控。 |
+
 ---
 
 ## 🖼️ 界面截图预览
@@ -65,6 +67,8 @@
 
 </div>
 
+---
+
 ## 🏛️ 系统架构
 
 ```mermaid
@@ -80,20 +84,23 @@ flowchart TB
         APIEngine[RESTful API 引擎<br/>PIN 鉴权与速率限制]
         DeviceMonitor[DHCP & ARP 嗅探器<br/>实时流量速率统计]
         QuotaEngine[活跃时长计量器<br/>Token Bucket 调度算法]
+        StatsTracker[统计与画像引擎<br/>24h 小时桶与历史归档]
         PolicyDispatcher[规则调度器 & Netfilter 管理]
-        CloudSyncer[出站云同步器<br/>Long-Poll 中继]
+        CloudSyncer[出站云同步器<br/>CF Long-Poll & Go WS 中继]
     end
 
     subgraph KernelAndOS [Linux 内核与网络子系统]
-        NetfilterFWD[iptables PARENT_CONTROL_FWD<br/>一键断网与时间段过滤]
+        NetfilterMangle[iptables PARENT_CONTROL_MANGLE_PRE<br/>第一优先级防代理劫持]
+        NetfilterInput[iptables PARENT_CONTROL_INPUT<br/>防直连路由器本地服务]
+        NetfilterFWD[iptables PARENT_CONTROL_FWD<br/>转发断网与 DoH 拦截]
         NetfilterNAT[iptables PARENT_CONTROL_NAT_PRE<br/>53 端口强制重定向]
         DPIEngine[kmod-oaf 内核模块<br/>/dev/appfilter 字符设备]
         DNSResolver[dnsmasq-full<br/>SafeSearch 动态规则]
     end
 
-    subgraph CloudLayer [可选公网远程中继]
-        CFWorker[⚡ Cloudflare Worker<br/>Serverless 中继]
-        CFKV[(Cloudflare KV<br/>状态与指令队列)]
+    subgraph CloudLayer [双模式云端中继]
+        CFWorker[⚡ Cloudflare Worker<br/>Serverless 中继 + KV]
+        GoRelay[🚀 独立 Go Relay Server<br/>自建国内 VPS + WebSocket MQ]
     end
 
     WebUI <--> APIEngine
@@ -103,16 +110,21 @@ flowchart TB
 
     APIEngine <--> PolicyDispatcher
     DeviceMonitor --> QuotaEngine
+    QuotaEngine --> StatsTracker
     QuotaEngine <--> PolicyDispatcher
+    PolicyDispatcher --> NetfilterMangle
+    PolicyDispatcher --> NetfilterInput
     PolicyDispatcher --> NetfilterFWD
     PolicyDispatcher --> NetfilterNAT
     PolicyDispatcher --> DPIEngine
     PolicyDispatcher --> DNSResolver
 
     CloudSyncer <--> CFWorker
-    CFWorker <--> CFKV
+    CloudSyncer <--> GoRelay
     iOSApp -. 4G/5G 远程 .-> CFWorker
+    iOSApp -. 4G/5G 远程 .-> GoRelay
     AndroidApp -. 4G/5G 远程 .-> CFWorker
+    AndroidApp -. 4G/5G 远程 .-> GoRelay
 ```
 
 ---

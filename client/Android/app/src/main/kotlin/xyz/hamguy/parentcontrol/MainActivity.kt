@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -45,9 +46,14 @@ class MainActivity : ComponentActivity() {
                     bottomBar = {
                         NavigationBar {
                             items.forEach { screen ->
+                                val labelText = when (screen) {
+                                    Screen.Dashboard -> stringResource(R.string.dashboard_title)
+                                    Screen.Devices -> stringResource(R.string.devices_title)
+                                    Screen.Settings -> stringResource(R.string.settings_title)
+                                }
                                 NavigationBarItem(
-                                    icon = { Icon(screen.icon, contentDescription = screen.title) },
-                                    label = { Text(screen.title) },
+                                    icon = { Icon(screen.icon, contentDescription = labelText) },
+                                    label = { Text(labelText) },
                                     selected = currentRoute == screen.route,
                                     onClick = {
                                         if (currentRoute != screen.route) {
