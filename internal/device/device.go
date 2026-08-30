@@ -14,18 +14,20 @@ import (
 
 // DeviceTracker manages local network device discovery and traffic monitoring
 type DeviceTracker struct {
-	mu         sync.RWMutex
-	devices    map[string]*models.Device // key: MAC
-	prevBytes  map[string]uint64
-	lastSample time.Time
+	mu          sync.RWMutex
+	devices     map[string]*models.Device // key: MAC
+	prevRxBytes map[string]uint64
+	prevTxBytes map[string]uint64
+	lastSample  time.Time
 }
 
 // NewDeviceTracker creates a new DeviceTracker instance
 func NewDeviceTracker() *DeviceTracker {
 	dt := &DeviceTracker{
-		devices:    make(map[string]*models.Device),
-		prevBytes:  make(map[string]uint64),
-		lastSample: time.Now(),
+		devices:     make(map[string]*models.Device),
+		prevRxBytes: make(map[string]uint64),
+		prevTxBytes: make(map[string]uint64),
+		lastSample:  time.Now(),
 	}
 	return dt
 }
@@ -118,14 +120,23 @@ func (dt *DeviceTracker) ScanDevices() []*models.Device {
 	return list
 }
 
-// updateTrafficRates calculates current transfer rates for each device
+// updateTrafficRates calculates current transfer rates for each device from nf_conntrack
 func (dt *DeviceTracker) updateTrafficRates(now time.Time) {
 	elapsed := now.Sub(dt.lastSample).Seconds()
 	if elapsed <= 0 {
 		elapsed = 1
 	}
 
-	currentBytes := make(map[string]uint64)
+	currentRx := make(map[string]uint64)
+	currentTx := make(map[string]uint64)
+
+	// Map IP -> Device
+	ipToDev := make(map[string]*models.Device)
+	for _, d := range dt.devices {
+		if d.IP != "" {
+			ipToDev[d.IP] = d
+		}
+	}
 
 	// Try reading /proc/net/nf_conntrack or /proc/net/ip_conntrack
 	conntrackPath := "/proc/net/nf_conntrack"
@@ -137,27 +148,48 @@ func (dt *DeviceTracker) updateTrafficRates(now time.Time) {
 		scanner := bufio.NewScanner(file)
 		for scanner.Scan() {
 			line := scanner.Text()
-			// Look for bytes= statistic: src=192.168.0.150 dst=... bytes=12345
-			if strings.Contains(line, "bytes=") {
-				fields := strings.Fields(line)
-				var srcIP string
-				var bytesVal uint64
-				for _, f := range fields {
-					if strings.HasPrefix(f, "src=192.168.") {
-						srcIP = strings.TrimPrefix(f, "src=")
-					} else if strings.HasPrefix(f, "bytes=") && srcIP != "" {
-						b, _ := strconv.ParseUint(strings.TrimPrefix(f, "bytes="), 10, 64)
-						bytesVal += b
+			if !strings.Contains(line, "bytes=") {
+				continue
+			}
+
+			// In conntrack lines, fields appear in two direction blocks:
+			// Original: [src=IP1 dst=IP2 ... packets=P1 bytes=B1]
+			// Reply:    [src=IP3 dst=IP4 ... packets=P2 bytes=B2]
+			fields := strings.Fields(line)
+			var srcList, dstList []string
+			var bytesList []uint64
+
+			for _, f := range fields {
+				if strings.HasPrefix(f, "src=") {
+					srcList = append(srcList, strings.TrimPrefix(f, "src="))
+				} else if strings.HasPrefix(f, "dst=") {
+					dstList = append(dstList, strings.TrimPrefix(f, "dst="))
+				} else if strings.HasPrefix(f, "bytes=") {
+					if b, err := strconv.ParseUint(strings.TrimPrefix(f, "bytes="), 10, 64); err == nil {
+						bytesList = append(bytesList, b)
 					}
 				}
-				if srcIP != "" {
-					// Map IP to MAC
-					for _, d := range dt.devices {
-						if d.IP == srcIP {
-							currentBytes[d.MAC] += bytesVal
-							break
-						}
+			}
+
+			if len(srcList) >= 2 && len(bytesList) >= 2 {
+				origSrc := srcList[0]
+				origBytes := bytesList[0]
+				replyBytes := bytesList[1]
+
+				// Outbound flow initiated by LAN device (e.g. iPad -> Web server)
+				if dev, ok := ipToDev[origSrc]; ok {
+					currentTx[dev.MAC] += origBytes
+					currentRx[dev.MAC] += replyBytes
+				} else if len(dstList) >= 2 {
+					replyDst := dstList[1]
+					if dev, ok := ipToDev[replyDst]; ok {
+						currentTx[dev.MAC] += origBytes
+						currentRx[dev.MAC] += replyBytes
 					}
+				}
+			} else if len(srcList) >= 1 && len(bytesList) >= 1 {
+				if dev, ok := ipToDev[srcList[0]]; ok {
+					currentTx[dev.MAC] += bytesList[0]
 				}
 			}
 		}
@@ -165,14 +197,30 @@ func (dt *DeviceTracker) updateTrafficRates(now time.Time) {
 	}
 
 	for mac, d := range dt.devices {
-		curr := currentBytes[mac]
-		prev := dt.prevBytes[mac]
-		if curr >= prev && prev > 0 {
-			diff := curr - prev
-			d.RxRate = uint64(float64(diff) / elapsed)
-			d.TotalBytes += diff
+		rx := currentRx[mac]
+		tx := currentTx[mac]
+
+		prevRx := dt.prevRxBytes[mac]
+		prevTx := dt.prevTxBytes[mac]
+
+		if rx >= prevRx && prevRx > 0 {
+			rxDiff := rx - prevRx
+			d.RxRate = uint64(float64(rxDiff) / elapsed)
+			d.TotalBytes += rxDiff
+		} else {
+			d.RxRate = 0
 		}
-		dt.prevBytes[mac] = curr
+
+		if tx >= prevTx && prevTx > 0 {
+			txDiff := tx - prevTx
+			d.TxRate = uint64(float64(txDiff) / elapsed)
+			d.TotalBytes += txDiff
+		} else {
+			d.TxRate = 0
+		}
+
+		dt.prevRxBytes[mac] = rx
+		dt.prevTxBytes[mac] = tx
 	}
 
 	dt.lastSample = now

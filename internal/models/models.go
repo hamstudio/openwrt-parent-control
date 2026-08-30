@@ -47,6 +47,7 @@ type Member struct {
 	BonusUntil     *time.Time   `json:"bonus_until"`      // Expiration time of temporary bonus time
 	QuotaMinutes   int          `json:"quota_minutes"`    // Daily allowed online duration in minutes (0 for unlimited)
 	UsedMinutes    int          `json:"used_minutes"`     // Minutes used today
+	ActiveDate     string       `json:"active_date,omitempty"` // Date stamp for current UsedMinutes (YYYY-MM-DD)
 	LastActiveTime time.Time    `json:"last_active_time"` // Last active timestamp
 	Schedule       ScheduleRule `json:"schedule"`         // Internet schedule rule
 	BlockedAppIDs  []int        `json:"blocked_app_ids"`  // Blocked DPI App IDs

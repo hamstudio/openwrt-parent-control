@@ -388,6 +388,21 @@ func (st *StatsTracker) GetDeviceUsedMinutesToday(mac string) int {
 	return 0
 }
 
+// GetMemberUsedMinutesToday aggregates today's active minutes across all devices bound to a member
+func (st *StatsTracker) GetMemberUsedMinutesToday(macs []string) int {
+	st.mu.RLock()
+	defer st.mu.RUnlock()
+
+	total := 0
+	for _, mac := range macs {
+		norm := strings.ToUpper(strings.TrimSpace(mac))
+		if d, ok := st.todayStats[norm]; ok {
+			total += d.UsedMinutes
+		}
+	}
+	return total
+}
+
 // GetOverview aggregates family router usage metrics for today and 7-day trend
 func (st *StatsTracker) GetOverview(devices []*models.Device, members []models.Member) *models.StatsOverview {
 	st.mu.RLock()

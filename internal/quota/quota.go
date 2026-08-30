@@ -26,19 +26,19 @@ type PolicyEngine struct {
 	dpi          *dpi.DPIManager
 	tracker      *device.DeviceTracker
 	stats        *stats.StatsTracker
-	stopChan     chan struct{}
-	lastResetDay int
+	stopChan      chan struct{}
+	lastResetDate string
 }
 
 // NewPolicyEngine creates a new PolicyEngine instance
 func NewPolicyEngine(fw *firewall.FirewallManager, dpiMgr *dpi.DPIManager, dt *device.DeviceTracker) *PolicyEngine {
 	engine := &PolicyEngine{
-		members:      make(map[string]*models.Member),
-		fw:           fw,
-		dpi:          dpiMgr,
-		tracker:      dt,
-		stopChan:     make(chan struct{}),
-		lastResetDay: -1,
+		members:       make(map[string]*models.Member),
+		fw:            fw,
+		dpi:           dpiMgr,
+		tracker:       dt,
+		stopChan:      make(chan struct{}),
+		lastResetDate: tz.Now().Format("2006-01-02"),
 		settings: models.GlobalSettings{
 			Enabled:           true,
 			WebPort:           8088,
@@ -104,21 +104,22 @@ func (pe *PolicyEngine) runLoop() {
 	}
 }
 
-// checkDailyReset resets daily active duration at the specified hour
+// checkDailyReset resets daily active duration when the calendar date changes
 func (pe *PolicyEngine) checkDailyReset(now time.Time) {
 	pe.mu.Lock()
 	defer pe.mu.Unlock()
 
-	resetHour := pe.settings.DailyResetHour
-	if now.Hour() == resetHour && now.Day() != pe.lastResetDay {
-		log.Printf("[Quota] Daily quota reset triggered at %s for day %d.", now.Format("15:04:05"), now.Day())
+	todayStr := now.Format("2006-01-02")
+	if pe.lastResetDate != todayStr {
+		log.Printf("[Quota] Day changed from '%s' to '%s'. Resetting daily used minutes for all members.", pe.lastResetDate, todayStr)
 		for _, m := range pe.members {
 			m.UsedMinutes = 0
+			m.ActiveDate = todayStr
 		}
-		pe.lastResetDay = now.Day()
+		pe.lastResetDate = todayStr
 
 		if pe.stats != nil {
-			pe.stats.CheckDailyRollover(now, resetHour)
+			pe.stats.CheckDailyRollover(now, pe.settings.DailyResetHour)
 		}
 	}
 }
@@ -134,12 +135,18 @@ func (pe *PolicyEngine) evaluateActiveUsage(now time.Time) {
 	pe.mu.Lock()
 	defer pe.mu.Unlock()
 
+	todayStr := now.Format("2006-01-02")
+
 	// 1. Scan and record per-device activity into stats engine
 	devices := pe.tracker.ScanDevices()
 	for _, dev := range devices {
 		if dev.Online && (dev.RxRate > MinActiveRateBytes || dev.TxRate > MinActiveRateBytes) {
 			if pe.stats != nil {
-				pe.stats.RecordMinuteActivity(dev.MAC, dev.IP, dev.Hostname, dev.MemberID, dev.RxRate*60, now)
+				rate := dev.RxRate
+				if dev.TxRate > rate {
+					rate = dev.TxRate
+				}
+				pe.stats.RecordMinuteActivity(dev.MAC, dev.IP, dev.Hostname, dev.MemberID, rate*60, now)
 			}
 		}
 	}
@@ -149,25 +156,37 @@ func (pe *PolicyEngine) evaluateActiveUsage(now time.Time) {
 		pe.stats.ScanOAFVisits(now)
 	}
 
-	// 3. Update member used minutes
+	// 3. Update member used minutes (synchronized with stats engine)
 	for _, member := range pe.members {
 		if !member.Enabled {
 			continue
 		}
 
-		// Check if any bound device has active human interactive traffic (>15KB/s)
-		isActive := false
-		for _, mac := range member.DeviceMACs {
-			dev := pe.tracker.GetDevice(mac)
-			if dev != nil && dev.Online && (dev.RxRate > MinActiveRateBytes || dev.TxRate > MinActiveRateBytes) {
-				isActive = true
-				break
-			}
+		if member.ActiveDate != todayStr {
+			member.UsedMinutes = 0
+			member.ActiveDate = todayStr
 		}
 
-		if isActive {
-			member.UsedMinutes++
-			member.LastActiveTime = now
+		if pe.stats != nil {
+			member.UsedMinutes = pe.stats.GetMemberUsedMinutesToday(member.DeviceMACs)
+			if member.UsedMinutes > 0 {
+				member.LastActiveTime = now
+			}
+		} else {
+			// Fallback: manual minute accumulation
+			isActive := false
+			for _, mac := range member.DeviceMACs {
+				dev := pe.tracker.GetDevice(mac)
+				if dev != nil && dev.Online && (dev.RxRate > MinActiveRateBytes || dev.TxRate > MinActiveRateBytes) {
+					isActive = true
+					break
+				}
+			}
+
+			if isActive {
+				member.UsedMinutes++
+				member.LastActiveTime = now
+			}
 		}
 	}
 }
@@ -238,7 +257,11 @@ func (pe *PolicyEngine) shouldBlockMember(m *models.Member, now time.Time) bool 
 	}
 
 	// 3. Check daily quota limit
-	if m.QuotaMinutes > 0 && m.UsedMinutes >= m.QuotaMinutes {
+	used := m.UsedMinutes
+	if pe.stats != nil {
+		used = pe.stats.GetMemberUsedMinutesToday(m.DeviceMACs)
+	}
+	if m.QuotaMinutes > 0 && used >= m.QuotaMinutes {
 		return true
 	}
 
@@ -292,6 +315,23 @@ func isTimeInRange(curr, start, end string) bool {
 func (pe *PolicyEngine) SetMember(m models.Member) {
 	pe.mu.Lock()
 	defer pe.mu.Unlock()
+
+	todayStr := tz.Now().Format("2006-01-02")
+	if existing, ok := pe.members[m.ID]; ok {
+		if m.UsedMinutes == 0 && existing.ActiveDate == todayStr {
+			m.UsedMinutes = existing.UsedMinutes
+		}
+		if m.BonusUntil == nil && existing.BonusUntil != nil && existing.BonusUntil.After(tz.Now()) {
+			m.BonusUntil = existing.BonusUntil
+		}
+		m.IsLocked = existing.IsLocked || m.IsLocked
+	}
+
+	m.ActiveDate = todayStr
+	if pe.stats != nil {
+		m.UsedMinutes = pe.stats.GetMemberUsedMinutesToday(m.DeviceMACs)
+	}
+
 	pe.members[m.ID] = &m
 }
 
@@ -302,13 +342,17 @@ func (pe *PolicyEngine) DeleteMember(id string) {
 	delete(pe.members, id)
 }
 
-// GetMembers returns all managed members
+// GetMembers returns all managed members with real-time synchronized used minutes
 func (pe *PolicyEngine) GetMembers() []models.Member {
 	pe.mu.RLock()
 	defer pe.mu.RUnlock()
 	list := make([]models.Member, 0, len(pe.members))
 	for _, m := range pe.members {
-		list = append(list, *m)
+		cp := *m
+		if pe.stats != nil {
+			cp.UsedMinutes = pe.stats.GetMemberUsedMinutesToday(m.DeviceMACs)
+		}
+		list = append(list, cp)
 	}
 	return list
 }
