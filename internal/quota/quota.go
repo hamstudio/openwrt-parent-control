@@ -125,9 +125,11 @@ func (pe *PolicyEngine) checkDailyReset(now time.Time) {
 }
 
 const (
-	// MinActiveRateBytes is the threshold (15 KB/s) to distinguish real user interactive traffic
-	// from background heartbeats, push notifications (APNs/FCM), NTP, and IoT keepalives.
-	MinActiveRateBytes = 15360
+	// MinActiveMinuteBytes is the minimum aggregate physical traffic (150 KB/minute)
+	// required to classify a 60-second window as interactive human active usage.
+	// This thoroughly filters out background push notifications (APNs/FCM 1-2KB),
+	// NTP, smart home keepalives, and idle device noise.
+	MinActiveMinuteBytes = 153600
 )
 
 // evaluateActiveUsage checks if managed devices have network traffic and increments active minutes
@@ -140,7 +142,8 @@ func (pe *PolicyEngine) evaluateActiveUsage(now time.Time) {
 	// 1. Scan and record per-device activity into stats engine
 	devices := pe.tracker.ScanDevices()
 	for _, dev := range devices {
-		if dev.Online && (dev.RxRate > MinActiveRateBytes || dev.TxRate > MinActiveRateBytes) {
+		minuteTraffic := dev.RxRate*60 + dev.TxRate*60
+		if dev.Online && (minuteTraffic >= MinActiveMinuteBytes) {
 			if pe.stats != nil {
 				rate := dev.RxRate
 				if dev.TxRate > rate {
@@ -177,7 +180,7 @@ func (pe *PolicyEngine) evaluateActiveUsage(now time.Time) {
 			isActive := false
 			for _, mac := range member.DeviceMACs {
 				dev := pe.tracker.GetDevice(mac)
-				if dev != nil && dev.Online && (dev.RxRate > MinActiveRateBytes || dev.TxRate > MinActiveRateBytes) {
+				if dev != nil && dev.Online && (dev.RxRate*60+dev.TxRate*60 >= MinActiveMinuteBytes) {
 					isActive = true
 					break
 				}
@@ -246,27 +249,34 @@ func (pe *PolicyEngine) EvaluateAndApply(now time.Time) {
 
 // shouldBlockMember determines whether an individual member should have internet access cut off
 func (pe *PolicyEngine) shouldBlockMember(m *models.Member, now time.Time) bool {
-	// 1. Check one-click lock
+	// 1. Check one-click lock (Absolute priority)
 	if m.IsLocked {
 		return true
 	}
 
-	// 2. Check temporary bonus time exemption
+	// 2. If member management is disabled and not locked, unconditionally allow access
+	if !m.Enabled {
+		return false
+	}
+
+	// 3. Check temporary bonus time exemption
 	if m.BonusUntil != nil && m.BonusUntil.After(now) {
 		return false // Under bonus time, allow access
 	}
 
-	// 3. Check daily quota limit
-	used := m.UsedMinutes
-	if pe.stats != nil {
-		used = pe.stats.GetMemberUsedMinutesToday(m.DeviceMACs)
-	}
-	if m.QuotaMinutes > 0 && used >= m.QuotaMinutes {
-		return true
+	// 3. Check daily quota limit (only enforced if QuotaMinutes > 0)
+	if m.QuotaMinutes > 0 {
+		used := m.UsedMinutes
+		if pe.stats != nil {
+			used = pe.stats.GetMemberUsedMinutesToday(m.DeviceMACs)
+		}
+		if used >= m.QuotaMinutes {
+			return true
+		}
 	}
 
-	// 4. Check schedule rules
-	if m.Schedule.Enabled {
+	// 4. Check schedule rules (only enforced if enabled and has time ranges)
+	if m.Schedule.Enabled && len(m.Schedule.TimeRanges) > 0 {
 		currentWeekday := int(now.Weekday())
 		isMatchedDay := false
 		for _, day := range m.Schedule.Days {

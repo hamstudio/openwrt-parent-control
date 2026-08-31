@@ -64,6 +64,7 @@ func main() {
 
 	// 5. Initialize device tracker
 	devTracker := device.NewDeviceTracker()
+	devTracker.SetFirewall(fwMgr)
 
 	// 5.1 Initialize statistical usage tracker
 	statsTracker := stats.NewStatsTracker(*statsPath, dpiMgr)

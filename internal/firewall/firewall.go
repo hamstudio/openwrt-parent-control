@@ -3,6 +3,7 @@ package firewall
 import (
 	"log"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -16,10 +17,11 @@ type FirewallManager struct {
 }
 
 const (
-	ChainManglePre = "PARENT_CONTROL_MANGLE_PRE"
-	ChainFilterFwd = "PARENT_CONTROL_FWD"
-	ChainFilterIn  = "PARENT_CONTROL_INPUT"
-	ChainNatPre    = "PARENT_CONTROL_NAT_PRE"
+	ChainManglePre  = "PARENT_CONTROL_MANGLE_PRE"
+	ChainFilterFwd  = "PARENT_CONTROL_FWD"
+	ChainFilterIn   = "PARENT_CONTROL_INPUT"
+	ChainFilterAcct = "PARENT_CONTROL_ACCT"
+	ChainNatPre     = "PARENT_CONTROL_NAT_PRE"
 )
 
 // NewFirewallManager creates a new FirewallManager instance
@@ -38,19 +40,22 @@ func (fm *FirewallManager) Init() error {
 
 	log.Println("[Firewall] Initializing multi-layer parent control iptables chains...")
 
-	// 1. Mangle PREROUTING: Intercepts before OpenClash, Passwall, or any TProxy/NAT
+	// 1. Filter ACCT: Low-overhead monotonic byte accounting for LAN devices
+	fm.ensureCustomChain("filter", ChainFilterAcct, "FORWARD")
+
+	// 2. Mangle PREROUTING: Intercepts before OpenClash, Passwall, or any TProxy/NAT
 	fm.ensureCustomChain("mangle", ChainManglePre, "PREROUTING")
 
-	// 2. Filter INPUT: Blocks traffic targeting router ports
+	// 3. Filter INPUT: Blocks traffic targeting router ports
 	fm.ensureCustomChain("filter", ChainFilterIn, "INPUT")
 
-	// 3. Filter FORWARD: Standard forwarding block & DoH/DoT intercept
+	// 4. Filter FORWARD: Standard forwarding block & DoH/DoT intercept
 	fm.ensureCustomChain("filter", ChainFilterFwd, "FORWARD")
 
-	// 4. Nat PREROUTING: Port 53 DNS redirection
+	// 5. Nat PREROUTING: Port 53 DNS redirection
 	fm.ensureCustomChain("nat", ChainNatPre, "PREROUTING")
 
-	// 5. Apply baseline security rules
+	// 6. Apply baseline security rules
 	fm.applyBaseRules()
 
 	return nil
@@ -139,6 +144,71 @@ func (fm *FirewallManager) SyncBlockedMACs(macs []string) error {
 	return nil
 }
 
+type IPByteStats struct {
+	RxBytes uint64
+	TxBytes uint64
+}
+
+// SyncAccountingIPs ensures accounting rules exist for managed or active LAN IPs
+func (fm *FirewallManager) SyncAccountingIPs(ips []string) {
+	fm.mu.Lock()
+	defer fm.mu.Unlock()
+
+	// Ensure ChainFilterAcct exists and is inserted at FORWARD
+	fm.ensureCustomChain("filter", ChainFilterAcct, "FORWARD")
+
+	_ = exec.Command("iptables", "-t", "filter", "-F", ChainFilterAcct).Run()
+	for _, ip := range ips {
+		ip = strings.TrimSpace(ip)
+		if ip == "" || !strings.HasPrefix(ip, "192.168.") && !strings.HasPrefix(ip, "10.") && !strings.HasPrefix(ip, "172.") {
+			continue
+		}
+		// Inbound (Download / Rx for LAN device)
+		_ = exec.Command("iptables", "-t", "filter", "-A", ChainFilterAcct, "-d", ip, "-j", "RETURN").Run()
+		// Outbound (Upload / Tx for LAN device)
+		_ = exec.Command("iptables", "-t", "filter", "-A", ChainFilterAcct, "-s", ip, "-j", "RETURN").Run()
+	}
+}
+
+// ReadAccountingBytes parses byte counters from PARENT_CONTROL_ACCT iptables chain
+func (fm *FirewallManager) ReadAccountingBytes() map[string]IPByteStats {
+	fm.mu.Lock()
+	defer fm.mu.Unlock()
+
+	out, err := exec.Command("iptables", "-t", "filter", "-L", ChainFilterAcct, "-v", "-n", "-x").Output()
+	if err != nil {
+		return nil
+	}
+
+	result := make(map[string]IPByteStats)
+	lines := strings.Split(string(out), "\n")
+	for _, line := range lines {
+		fields := strings.Fields(line)
+		// Expected format: pkts bytes target prot opt in out source destination
+		if len(fields) < 9 {
+			continue
+		}
+		bytesVal, err := strconv.ParseUint(fields[1], 10, 64)
+		if err != nil {
+			continue
+		}
+		src := fields[7]
+		dst := fields[8]
+
+		if strings.HasPrefix(dst, "192.168.") || strings.HasPrefix(dst, "10.") || strings.HasPrefix(dst, "172.") {
+			st := result[dst]
+			st.RxBytes += bytesVal
+			result[dst] = st
+		} else if strings.HasPrefix(src, "192.168.") || strings.HasPrefix(src, "10.") || strings.HasPrefix(src, "172.") {
+			st := result[src]
+			st.TxBytes += bytesVal
+			result[src] = st
+		}
+	}
+
+	return result
+}
+
 // Cleanup removes all parent control firewall rules and chains
 func (fm *FirewallManager) Cleanup() {
 	fm.mu.Lock()
@@ -148,6 +218,7 @@ func (fm *FirewallManager) Cleanup() {
 	_ = exec.Command("iptables", "-t", "mangle", "-D", "PREROUTING", "-j", ChainManglePre).Run()
 	_ = exec.Command("iptables", "-t", "filter", "-D", "INPUT", "-j", ChainFilterIn).Run()
 	_ = exec.Command("iptables", "-t", "filter", "-D", "FORWARD", "-j", ChainFilterFwd).Run()
+	_ = exec.Command("iptables", "-t", "filter", "-D", "FORWARD", "-j", ChainFilterAcct).Run()
 	_ = exec.Command("iptables", "-t", "nat", "-D", "PREROUTING", "-j", ChainNatPre).Run()
 
 	// Flush and delete custom chains
@@ -155,10 +226,13 @@ func (fm *FirewallManager) Cleanup() {
 	_ = exec.Command("iptables", "-t", "mangle", "-X", ChainManglePre).Run()
 
 	_ = exec.Command("iptables", "-t", "filter", "-F", ChainFilterIn).Run()
-	_ = exec.Command("iptables", "-t", "filter", "-F", ChainFilterIn).Run()
+	_ = exec.Command("iptables", "-t", "filter", "-X", ChainFilterIn).Run()
 
 	_ = exec.Command("iptables", "-t", "filter", "-F", ChainFilterFwd).Run()
 	_ = exec.Command("iptables", "-t", "filter", "-X", ChainFilterFwd).Run()
+
+	_ = exec.Command("iptables", "-t", "filter", "-F", ChainFilterAcct).Run()
+	_ = exec.Command("iptables", "-t", "filter", "-X", ChainFilterAcct).Run()
 
 	_ = exec.Command("iptables", "-t", "nat", "-F", ChainNatPre).Run()
 	_ = exec.Command("iptables", "-t", "nat", "-X", ChainNatPre).Run()

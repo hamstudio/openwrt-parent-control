@@ -1376,12 +1376,15 @@ async function saveMemberForm() {
     const deviceMACs = Array.from(document.querySelectorAll('input[name="modalDevice"]:checked')).map(cb => cb.value);
     const blockedAppIDs = Array.from(document.querySelectorAll('input[name="modalApp"]:checked')).map(cb => parseInt(cb.value));
 
+    const existingMember = appState.members.find(m => m.id === id);
+    const isEnabled = existingMember ? existingMember.enabled : true;
+
     const payload = {
         id: id,
         name: name,
         avatar: avatar,
         device_macs: deviceMACs,
-        enabled: true,
+        enabled: isEnabled,
         quota_minutes: quota,
         schedule: {
             enabled: scheduleEnabled && timeRanges.length > 0,

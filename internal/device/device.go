@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"parentcontrol/internal/firewall"
 	"parentcontrol/internal/models"
 )
 
@@ -16,6 +17,7 @@ import (
 type DeviceTracker struct {
 	mu          sync.RWMutex
 	devices     map[string]*models.Device // key: MAC
+	fw          *firewall.FirewallManager
 	prevRxBytes map[string]uint64
 	prevTxBytes map[string]uint64
 	lastSample  time.Time
@@ -30,6 +32,13 @@ func NewDeviceTracker() *DeviceTracker {
 		lastSample:  time.Now(),
 	}
 	return dt
+}
+
+// SetFirewall attaches the firewall manager to enable kernel-level accurate traffic accounting
+func (dt *DeviceTracker) SetFirewall(fw *firewall.FirewallManager) {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	dt.fw = fw
 }
 
 // ScanDevices scans all devices connected to the local network
@@ -120,7 +129,7 @@ func (dt *DeviceTracker) ScanDevices() []*models.Device {
 	return list
 }
 
-// updateTrafficRates calculates current transfer rates for each device from nf_conntrack
+// updateTrafficRates calculates current transfer rates for each device
 func (dt *DeviceTracker) updateTrafficRates(now time.Time) {
 	elapsed := now.Sub(dt.lastSample).Seconds()
 	if elapsed <= 0 {
@@ -130,70 +139,90 @@ func (dt *DeviceTracker) updateTrafficRates(now time.Time) {
 	currentRx := make(map[string]uint64)
 	currentTx := make(map[string]uint64)
 
-	// Map IP -> Device
-	ipToDev := make(map[string]*models.Device)
+	// Collect active LAN IPs for accounting sync
+	activeIPs := make([]string, 0, len(dt.devices))
 	for _, d := range dt.devices {
 		if d.IP != "" {
-			ipToDev[d.IP] = d
+			activeIPs = append(activeIPs, d.IP)
 		}
 	}
 
-	// Try reading /proc/net/nf_conntrack or /proc/net/ip_conntrack
-	conntrackPath := "/proc/net/nf_conntrack"
-	if _, err := os.Stat(conntrackPath); os.IsNotExist(err) {
-		conntrackPath = "/proc/net/ip_conntrack"
-	}
-
-	if file, err := os.Open(conntrackPath); err == nil {
-		scanner := bufio.NewScanner(file)
-		for scanner.Scan() {
-			line := scanner.Text()
-			if !strings.Contains(line, "bytes=") {
-				continue
-			}
-
-			// In conntrack lines, fields appear in two direction blocks:
-			// Original: [src=IP1 dst=IP2 ... packets=P1 bytes=B1]
-			// Reply:    [src=IP3 dst=IP4 ... packets=P2 bytes=B2]
-			fields := strings.Fields(line)
-			var srcList, dstList []string
-			var bytesList []uint64
-
-			for _, f := range fields {
-				if strings.HasPrefix(f, "src=") {
-					srcList = append(srcList, strings.TrimPrefix(f, "src="))
-				} else if strings.HasPrefix(f, "dst=") {
-					dstList = append(dstList, strings.TrimPrefix(f, "dst="))
-				} else if strings.HasPrefix(f, "bytes=") {
-					if b, err := strconv.ParseUint(strings.TrimPrefix(f, "bytes="), 10, 64); err == nil {
-						bytesList = append(bytesList, b)
+	// 1. Try reading from kernel iptables PARENT_CONTROL_ACCT chain (strictly monotonic, most accurate)
+	usedIPTables := false
+	if dt.fw != nil {
+		acctMap := dt.fw.ReadAccountingBytes()
+		if len(acctMap) > 0 {
+			usedIPTables = true
+			for _, d := range dt.devices {
+				if d.IP != "" {
+					if stat, ok := acctMap[d.IP]; ok {
+						currentRx[d.MAC] = stat.RxBytes
+						currentTx[d.MAC] = stat.TxBytes
 					}
 				}
 			}
+		}
+		// Periodically ensure accounting rules are present for all active LAN IPs
+		dt.fw.SyncAccountingIPs(activeIPs)
+	}
 
-			if len(srcList) >= 2 && len(bytesList) >= 2 {
-				origSrc := srcList[0]
-				origBytes := bytesList[0]
-				replyBytes := bytesList[1]
+	// 2. Fallback to conntrack if iptables accounting not available
+	if !usedIPTables {
+		ipToDev := make(map[string]*models.Device)
+		for _, d := range dt.devices {
+			if d.IP != "" {
+				ipToDev[d.IP] = d
+			}
+		}
 
-				// Outbound flow initiated by LAN device (e.g. iPad -> Web server)
-				if dev, ok := ipToDev[origSrc]; ok {
-					currentTx[dev.MAC] += origBytes
-					currentRx[dev.MAC] += replyBytes
-				} else if len(dstList) >= 2 {
-					replyDst := dstList[1]
-					if dev, ok := ipToDev[replyDst]; ok {
+		conntrackPath := "/proc/net/nf_conntrack"
+		if _, err := os.Stat(conntrackPath); os.IsNotExist(err) {
+			conntrackPath = "/proc/net/ip_conntrack"
+		}
+
+		if file, err := os.Open(conntrackPath); err == nil {
+			scanner := bufio.NewScanner(file)
+			for scanner.Scan() {
+				line := scanner.Text()
+				if !strings.Contains(line, "bytes=") {
+					continue
+				}
+
+				fields := strings.Fields(line)
+				var srcList, dstList []string
+				var bytesList []uint64
+
+				for _, f := range fields {
+					if strings.HasPrefix(f, "src=") {
+						srcList = append(srcList, strings.TrimPrefix(f, "src="))
+					} else if strings.HasPrefix(f, "dst=") {
+						dstList = append(dstList, strings.TrimPrefix(f, "dst="))
+					} else if strings.HasPrefix(f, "bytes=") {
+						if b, err := strconv.ParseUint(strings.TrimPrefix(f, "bytes="), 10, 64); err == nil {
+							bytesList = append(bytesList, b)
+						}
+					}
+				}
+
+				if len(srcList) >= 2 && len(bytesList) >= 2 {
+					origSrc := srcList[0]
+					origBytes := bytesList[0]
+					replyBytes := bytesList[1]
+
+					if dev, ok := ipToDev[origSrc]; ok {
 						currentTx[dev.MAC] += origBytes
 						currentRx[dev.MAC] += replyBytes
+					} else if len(dstList) >= 2 {
+						replyDst := dstList[1]
+						if dev, ok := ipToDev[replyDst]; ok {
+							currentTx[dev.MAC] += origBytes
+							currentRx[dev.MAC] += replyBytes
+						}
 					}
 				}
-			} else if len(srcList) >= 1 && len(bytesList) >= 1 {
-				if dev, ok := ipToDev[srcList[0]]; ok {
-					currentTx[dev.MAC] += bytesList[0]
-				}
 			}
+			file.Close()
 		}
-		file.Close()
 	}
 
 	for mac, d := range dt.devices {
