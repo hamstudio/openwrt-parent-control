@@ -106,12 +106,24 @@ jobs:
       - name: Display Release Assets
         run: ls -lh release-assets/
 
+      - name: Determine Release Notes
+        id: notes
+        run: |
+          TAG_FILE="docs/releases/${{ github.ref_name }}.md"
+          if [ -f "$TAG_FILE" ]; then
+            echo "notes_file=$TAG_FILE" >> $GITHUB_OUTPUT
+          elif [ -f "docs/releases/v1.0.0.md" ]; then
+            echo "notes_file=docs/releases/v1.0.0.md" >> $GITHUB_OUTPUT
+          else
+            echo "notes_file=" >> $GITHUB_OUTPUT
+          fi
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: ParentControl Guard ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
-          body_path: docs/releases/v1.0.0.md
+          body_path: ${{ steps.notes.outputs.notes_file }}
           files: |
             release-assets/*.ipk
             release-assets/*.apk
